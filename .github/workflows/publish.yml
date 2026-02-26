@@ -1,0 +1,60 @@
+name: Publish to Maven Central
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+          cache: gradle
+
+      - name: Build
+        run: .\gradlew build test
+
+      - name: List files
+        run: |
+          Get-ChildItem -Force build\libs\
+          
+      - name: Set RELEASE_VERSION variable
+        run: |
+          $version = Get-Content build\version.txt
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "RELEASE_VERSION=$version"
+
+      - name: Upload msstorelib.jar
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          name: msstorelib.jar
+          path: build\libs\msstorelib-${{ env.RELEASE_VERSION }}.jar
+        
+      - name: Publish to Maven Central
+        if: startsWith(github.ref, 'refs/tags/') # Only for releases
+        run: .\gradlew publishToMavenCentral --no-configuration-cache
+        env:
+          SIGNING_ENABLED: true
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_SECRET_KEY }}
