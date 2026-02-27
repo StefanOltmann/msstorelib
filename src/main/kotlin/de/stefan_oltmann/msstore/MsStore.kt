@@ -53,7 +53,7 @@ public object MsStore {
      * Shows the Microsoft Store rate-and-review dialog for the current app.
      *
      * This must be called while the app has a focused UI window so the native
-     * layer can attach the Store dialog to the foreground HWND.
+     * layer can attach and service the Store dialog.
      *
      * @throws MsStoreLicenseException when the native call fails.
      */

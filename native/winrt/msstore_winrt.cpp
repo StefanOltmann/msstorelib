@@ -105,6 +105,38 @@ static bool initialize_store_ui_owner(const StoreContext& context) {
 }
 
 /*
+ * Pumps a nested message loop until the async operation completes.
+ *
+ * Waiting with .get() can block the calling STA thread hard enough to
+ * destabilize the host app. This loop keeps that thread responsive until the
+ * async result is ready while preserving a synchronous native API for the JVM.
+ */
+static StoreRateAndReviewResult wait_for_rate_and_review_result(
+    const Windows::Foundation::IAsyncOperation<StoreRateAndReviewResult>& operation
+) {
+
+    while (operation.Status() == Windows::Foundation::AsyncStatus::Started) {
+
+        MSG message{};
+
+        while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+            ::TranslateMessage(&message);
+            ::DispatchMessageW(&message);
+        }
+
+        ::MsgWaitForMultipleObjectsEx(
+            0,
+            nullptr,
+            50,
+            QS_ALLINPUT,
+            MWMO_INPUTAVAILABLE
+        );
+    }
+
+    return operation.GetResults();
+}
+
+/*
  * Returns StoreAppLicense.ExtendedJsonData as UTF-8 JSON, or nullptr on error.
  *
  * The call blocks until the async Store API completes; this keeps the native
@@ -219,7 +251,8 @@ extern "C" MSSTORE_WINRT_API int msstore_winrt_request_rate_and_review() {
             return -1;
         }
 
-        StoreRateAndReviewResult result = context.RequestRateAndReviewAppAsync().get();
+        const auto operation = context.RequestRateAndReviewAppAsync();
+        StoreRateAndReviewResult result = wait_for_rate_and_review_result(operation);
 
         if (!result) {
             g_lastError = "StoreRateAndReviewResult is null.";

@@ -109,8 +109,8 @@ when (status) {
 }
 ```
 
-For packaged desktop apps, Microsoft documents this API as a UI-thread call.
-Ensure your app has a focused window when requesting the dialog.
+The native layer assigns the current foreground window as the owner HWND for
+the Store dialog. Ensure your app has a focused window when requesting it.
 
 ## API model types
 

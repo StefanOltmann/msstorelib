@@ -30,6 +30,8 @@ internal object MsStoreRateAndReview {
     /**
      * Shows the Microsoft Store rating and review dialog for the current app.
      *
+     * This call uses the current foreground window as the Store dialog owner.
+     *
      * @throws MsStoreLicenseException when the native call fails.
      */
     fun requestRateAndReview(): MsStoreRateAndReviewStatus {
