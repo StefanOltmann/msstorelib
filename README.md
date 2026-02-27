@@ -1,36 +1,19 @@
 # msstorelib
 
 ![Kotlin](https://img.shields.io/badge/kotlin-2.3.10-blue.svg?logo=kotlin)
-![JVM](https://img.shields.io/badge/-JVM-gray.svg?style=flat)
+![JVM 25](https://img.shields.io/badge/-JVM-gray.svg?style=flat)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-gray?&logo=GitHub-Sponsors&logoColor=EA4AAA)](https://github.com/sponsors/StefanOltmann)
 
 Kotlin/JVM library for Microsoft Store license info and in-app purchases.
 
-The JVM calls a small C++/WinRT DLL (`msstore_winrt.dll`) via JNA.
+The JVM calls a small C++/WinRT DLL (`msstore_winrt.dll`) via Java FFM (Panama).
 
 ## Features
 
 - Query the Store license JSON (`ExtendedJsonData`).
 - Parse a stable subset of license fields into Kotlin data classes.
 - Trigger the Store purchase UI for add-ons or other in-app products.
-- Embedded native DLL with an override path for custom-builds.
-
-## Official docs
-
-- Get license info for apps and add-ons:
-  https://learn.microsoft.com/windows/uwp/monetize/get-license-info-for-apps-and-add-ons
-- Store JSON schema reference (`ExtendedJsonData`):
-  https://learn.microsoft.com/windows/uwp/monetize/data-schemas-for-store-products
-- StoreContext API:
-  https://learn.microsoft.com/uwp/api/windows.services.store.storecontext
-
-## Requirements (Windows)
-
-- Windows 10/11
-- App packaged with MSIX and a Microsoft Store identity
-- Product associated in Partner Center
-
-If these requirements are not met, Store APIs can return empty results or errors.
+- Native DLL loading with override, app-local, system-path, and embedded fallback resolution.
 
 ## Install from Maven Central
 
@@ -40,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.1.0")
+    implementation("de.stefan-oltmann:msstorelib:0.2.0")
 }
 ```
 
@@ -55,7 +38,7 @@ import de.stefan_oltmann.msstore.MsStoreLicenseException
 fun main() {
 
     try {
-        
+
         val json = MsStore.getLicenseJson()
         println("Raw JSON from Store:")
         println(json)
@@ -68,7 +51,7 @@ fun main() {
         println("isActive   = ${info.isActive}")
         println("isTrial    = ${info.isTrial}")
         println("expiration = ${info.expiration}")
-        
+
         if (info.productAddOns.isNotEmpty())
             println("addOns     = ${info.productAddOns.size}")
 
@@ -113,42 +96,70 @@ Store modal UI. Ensure your app has a focused window when requesting purchases.
 ## Error handling
 
 - `MsStoreLicenseException` is thrown when the native call fails.
-- The native layer stores the last error string and exposes it via `msstore_winrt_get_last_error()`.
+- The native layer stores the last error string, exposed in Kotlin via `MsStoreNative.getLastError()`.
 
-## Native DLL build
+## Requirements
 
-Build the C++/WinRT DLL with CMake:
+- Windows 10/11
+- App packaged with MSIX and a Microsoft Store identity
+- Product associated in Partner Center
+- Using Java 25 or higher
 
-```powershell
-cmake -S native/winrt -B build/winrt -G "Visual Studio 17 2022" -A x64 -DCMAKE_GENERATOR_INSTANCE="C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
-cmake --build build/winrt --config Release
-```
+If these requirements are not met, Store APIs can return empty results or errors.
 
-Output: `build/winrt/Release/msstore_winrt.dll`
+## Native DLL loading
 
-The Gradle task `buildNative` runs the same steps.
+Resolution order:
 
-### Optional environment overrides
+1. `-Dmsstore.winrt.path=...`
+2. `msstore_winrt.dll` in hosting app folder (next to app/JAR)
+3. System library path (`System.loadLibrary("msstore_winrt")`)
+4. Extract embedded resource `windows-x86_64/msstore_winrt.dll` to versioned cache and load it
 
-If `cmake` is not on PATH, set an explicit path:
+Extraction is only attempted when steps 1-3 fail.
+Cache path format:
+`<java.io.tmpdir>/msstorelib-native/<LIB_VERSION>/windows-x86_64/msstore_winrt.dll`
 
-```
-setx MSSTORE_CMAKE "C:\Program Files\CMake\bin\cmake.exe"
-```
+`LIB_VERSION` is generated at build time (from project version / git-versioning).
+This means extraction runs once per library version, not on every start.
 
-If CMake cannot locate your Visual Studio instance, set:
-
-```
-setx MSSTORE_VS_INSTANCE "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
-```
-
-## Embedded DLL
-
-The build embeds `msstore_winrt.dll` into the published JVM artifact under
-`native/msstore_winrt.dll`. At runtime JNA extracts and loads it automatically.
-
-If you want to use a different DLL build, override it at runtime:
+Override path example:
 
 ```
 -Dmsstore.winrt.path=C:\path\to\msstore_winrt.dll
 ```
+
+## Local DLL build
+
+For local builds you need to install these two dependencies.
+
+CMake:
+
+```powershell
+winget install --id Kitware.CMake -e --accept-source-agreements --accept-package-agreements
+```
+
+Visual Studio 2022 Build Tools (C++ workload):
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --accept-source-agreements --accept-package-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+If `winget` is unavailable, use manual installers:
+
+- CMake: https://cmake.org/download/
+- Visual Studio Build Tools: https://aka.ms/vs/17/release/vs_BuildTools.exe
+
+Then run: `.\gradlew buildNativeLib`
+
+This builds the DLL and copies it to:
+`src/main/resources/windows-x86_64/msstore_winrt.dll`
+
+## Official docs
+
+- Get license info for apps and add-ons:
+  https://learn.microsoft.com/windows/uwp/monetize/get-license-info-for-apps-and-add-ons
+- Store JSON schema reference (`ExtendedJsonData`):
+  https://learn.microsoft.com/windows/uwp/monetize/data-schemas-for-store-products
+- StoreContext API:
+  https://learn.microsoft.com/uwp/api/windows.services.store.storecontext

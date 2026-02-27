@@ -1,5 +1,6 @@
-.gradle
-build/
-.kotlin
 .DS_Store
+.gradle
 .idea
+.kotlin
+/src/main/resources/windows-x86_64/msstore_winrt.dll
+build/

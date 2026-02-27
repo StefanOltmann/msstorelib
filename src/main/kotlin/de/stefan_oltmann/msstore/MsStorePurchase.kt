@@ -35,13 +35,11 @@ internal object MsStorePurchase {
 
         require(storeId.isNotBlank()) { "storeId must not be blank." }
 
-        val native = MsStoreNativeLoader.instance
-
-        val statusCode = native.msstore_winrt_request_purchase(storeId)
+        val statusCode = MsStoreNative.requestPurchase(storeId)
 
         if (statusCode < 0) {
 
-            val errorText = MsStoreNativeHelpers.readLastError(native)
+            val errorText = MsStoreNativeHelpers.readLastError()
 
             throw MsStoreLicenseException(errorText ?: "Native purchase request failed.")
         }

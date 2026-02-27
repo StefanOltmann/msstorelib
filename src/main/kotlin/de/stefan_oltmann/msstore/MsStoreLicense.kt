@@ -23,7 +23,7 @@ import kotlinx.serialization.json.Json
  * Internal entry-point for retrieving Microsoft Store license info.
  *
  * Implementation overview:
- * - JNA loads `msstore_winrt.dll` (C++/WinRT).
+ * - FFM (Panama) loads `msstore_winrt.dll` (C++/WinRT).
  * - The C++/WinRT DLL calls `StoreContext.GetAppLicenseAsync()` and returns
  *   the `ExtendedJsonData` string for parsing on the JVM.
  *
@@ -65,10 +65,8 @@ internal object MsStoreLicense {
      */
     fun getLicenseJson(): String {
 
-        val native = MsStoreNativeLoader.instance
-
         /* First, request the license payload. A null pointer indicates failure. */
-        val jsonPointer = native.msstore_winrt_get_license_json()
+        val jsonPointer = MsStoreNative.getLicenseJson()
 
         val jsonText = MsStoreNativeHelpers.readUtf8AndFree(jsonPointer)
 
@@ -76,7 +74,7 @@ internal object MsStoreLicense {
             return jsonText
 
         /* If the payload is null, ask the native layer for the error string. */
-        val errorText = MsStoreNativeHelpers.readLastError(native)
+        val errorText = MsStoreNativeHelpers.readLastError()
 
         throw MsStoreLicenseException(errorText ?: "Native license query failed.")
     }

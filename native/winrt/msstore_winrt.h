@@ -4,7 +4,7 @@
  * C ABI surface for the msstore_winrt.dll.
  *
  * This header intentionally exposes a C-compatible interface so the JVM can
- * call into the DLL via JNA without C++ name mangling issues.
+ * call into the DLL via FFM without C++ name mangling issues.
  *
  * Memory ownership contract:
  * - All returned strings are UTF-8 and allocated with CoTaskMemAlloc.

@@ -16,24 +16,33 @@
  */
 package de.stefan_oltmann.msstore
 
-import com.sun.jna.Pointer
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import java.nio.charset.StandardCharsets
 
 internal object MsStoreNativeHelpers {
 
     /**
-     * Reads a UTF-8 string from native memory and frees the pointer using the
-     * native `msstore_winrt_free` function.
+     * Hard limit when scanning a native C string for its null terminator.
+     *
+     * This prevents accidental unbounded reads if a native pointer is invalid or
+     * not properly null-terminated.
      */
-    fun readUtf8AndFree(pointer: Pointer?): String? {
+    private const val MAX_C_STRING_BYTES: Long = 16L * 1024L * 1024L
 
-        if (pointer == null)
+    /**
+     * Reads a UTF-8 string from native memory and frees the pointer using the
+     * native free function.
+     */
+    fun readUtf8AndFree(nativeStringSegment: MemorySegment?): String? {
+
+        if (nativeStringSegment == null)
             return null
 
-        val value = pointer.getString(0, StandardCharsets.UTF_8.name())
+        val value = readNullTerminatedUtf8(nativeStringSegment)
 
         /* Always free native allocations to avoid leaking in the JVM process. */
-        MsStoreNativeLoader.instance.msstore_winrt_free(pointer)
+        MsStoreNative.free(nativeStringSegment)
 
         return value
     }
@@ -41,6 +50,42 @@ internal object MsStoreNativeHelpers {
     /**
      * Reads the last native error string (if any) and frees the pointer.
      */
-    fun readLastError(native: MsStoreNative): String? =
-        readUtf8AndFree(native.msstore_winrt_get_last_error())
+    fun readLastError(): String? =
+        readUtf8AndFree(MsStoreNative.getLastError())
+
+    /**
+     * Decodes a null-terminated UTF-8 C string from native memory.
+     *
+     * The native side allocates these strings with CoTaskMemAlloc and returns a
+     * pointer. This method only decodes bytes; releasing memory is handled by
+     * [readUtf8AndFree].
+     */
+    private fun readNullTerminatedUtf8(nativeStringSegment: MemorySegment): String {
+
+        /* Treat pointer as a bounded byte region for safe manual scanning. */
+        val cString = nativeStringSegment.reinterpret(MAX_C_STRING_BYTES)
+
+        var length = 0L
+
+        /* Find terminating '\0'. */
+        while (length < MAX_C_STRING_BYTES && cString.get(ValueLayout.JAVA_BYTE, length).toInt() != 0) {
+            length++
+        }
+
+        /* Abort if no terminator was found in the allowed scan window. */
+        if (length == MAX_C_STRING_BYTES)
+            throw IllegalStateException("Native string exceeds ${MAX_C_STRING_BYTES / 1024 / 1024} MiB.")
+
+        /* Copy bytes into a JVM-owned array before decoding as UTF-8. */
+        val bytes = ByteArray(length.toInt())
+
+        var index = 0L
+
+        while (index < length) {
+            bytes[index.toInt()] = cString.get(ValueLayout.JAVA_BYTE, index)
+            index++
+        }
+
+        return String(bytes, StandardCharsets.UTF_8)
+    }
 }

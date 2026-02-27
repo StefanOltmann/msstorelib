@@ -1,12 +1,10 @@
 [versions]
 kotlin = "2.3.10"
 kotlinx-serialization = "1.9.0"
-jna = "5.18.1"
 git-versioning = "6.4.4"
 maven-publish = "0.36.0"
 
 [libraries]
-jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 
 [plugins]

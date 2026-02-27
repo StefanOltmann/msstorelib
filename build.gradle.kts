@@ -37,9 +37,6 @@ repositories {
 
 dependencies {
 
-    /* JNA bridges JVM <-> native DLL. */
-    implementation(libs.jna)
-
     /* JSON parsing for Store license payloads. */
     implementation(libs.kotlinx.serialization.json)
 
@@ -51,8 +48,12 @@ kotlin {
     /* Ensure public API is explicitly marked. */
     explicitApi()
 
-    /* Align with the minimum supported runtime. */
-    jvmToolchain(17)
+    /* We use Java 25, because it comes with FFM. */
+    jvmToolchain(25)
+
+    sourceSets["main"].kotlin.srcDirs(
+        file("build/generated/src/main/kotlin/")
+    )
 }
 
 java {
@@ -63,8 +64,11 @@ java {
 /* CMake output directory for the native DLL. */
 val winrtBuildDir = layout.buildDirectory.dir("winrt")
 
-/* Staging directory for embedding the DLL into JVM resources. */
-val embeddedNativeDir = layout.buildDirectory.dir("generated-resources/native")
+/* Shared DLL filename used by native build/copy tasks. */
+val winrtDllFileName = "msstore_winrt.dll"
+
+/* Standard resource location for the Windows x64 native DLL. */
+val windowsX64ResourceDir = layout.projectDirectory.dir("src/main/resources/windows-x86_64")
 
 // region Tool resolvers
 
@@ -132,7 +136,7 @@ fun resolveVisualStudioInstance(): String? {
 tasks.register<Exec>("configureWinrt") {
 
     group = "native"
-    description = "Configure the C++/WinRT build for msstore_winrt.dll."
+    description = "Configure the C++/WinRT build for $winrtDllFileName."
 
     /* The native DLL only builds on Windows. */
     onlyIf { org.gradle.internal.os.OperatingSystem.current().isWindows }
@@ -160,7 +164,7 @@ tasks.register<Exec>("configureWinrt") {
 tasks.register<Exec>("buildWinrt") {
 
     group = "native"
-    description = "Build msstore_winrt.dll (C++/WinRT)."
+    description = "Build $winrtDllFileName (C++/WinRT)."
 
     onlyIf { org.gradle.internal.os.OperatingSystem.current().isWindows }
 
@@ -177,34 +181,65 @@ tasks.register<Exec>("buildWinrt") {
     }
 }
 
-tasks.register("buildNative") {
+tasks.register<Copy>("buildNativeLib") {
 
     group = "native"
-    description = "Build msstore_winrt.dll (C++/WinRT)."
-
-    dependsOn("buildWinrt")
-}
-
-tasks.register<Copy>("prepareEmbeddedNative") {
-
-    group = "native"
-    description = "Embed msstore_winrt.dll into the JVM resources."
+    description = "Build $winrtDllFileName and copy it to src/main/resources/windows-x86_64."
 
     onlyIf { org.gradle.internal.os.OperatingSystem.current().isWindows }
 
     dependsOn("buildWinrt")
 
-    /* Copy the Release DLL into a generated resources' folder. */
-    from(winrtBuildDir.map { it.dir("Release").file("msstore_winrt.dll") })
-    into(embeddedNativeDir.map { it.dir("native") })
+    from(winrtBuildDir.map { it.dir("Release").file(winrtDllFileName) })
+    into(windowsX64ResourceDir)
 }
 
 tasks.named<ProcessResources>("processResources") {
+    dependsOn("buildNativeLib")
+}
 
-    /* Ensure the DLL is embedded before resources are packaged. */
-    dependsOn("prepareEmbeddedNative")
+tasks.matching { it.name == "sourcesJar" || it.name == "kotlinSourcesJar" }.configureEach {
+    dependsOn("buildNativeLib")
+    dependsOn("generateBuildInfo")
+}
 
-    from(embeddedNativeDir)
+tasks.withType<PublishToMavenRepository>().configureEach {
+    dependsOn("buildNativeLib")
+}
+
+tasks.withType<PublishToMavenLocal>().configureEach {
+    dependsOn("buildNativeLib")
+}
+// endregion
+
+// region BuildInfo.kt
+val generatedBuildInfoFile = layout.buildDirectory.file(
+    "generated/src/main/kotlin/de/stefan_oltmann/msstore/BuildInfo.kt"
+)
+
+val generateBuildInfo = tasks.register("generateBuildInfo") {
+
+    group = "build"
+    description = "Generate BuildInfo.kt with LIB_VERSION."
+
+    outputs.file(generatedBuildInfoFile)
+
+    doLast {
+
+        val outputFile = generatedBuildInfoFile.get().asFile
+
+        outputFile.parentFile.mkdirs()
+
+        outputFile.printWriter().use { writer ->
+            writer.println("package de.stefan_oltmann.msstore")
+            writer.println()
+            writer.println("internal const val LIB_VERSION: String = \"$version\"")
+        }
+    }
+}
+
+tasks.named("compileKotlin") {
+    dependsOn(generateBuildInfo)
 }
 // endregion
 
@@ -252,7 +287,7 @@ mavenPublishing {
         developers {
             developer {
                 name = "Stefan Oltmann"
-                url = "https://stefan-oltmann.de/"
+                url = "https://stefan-oltmann.de"
                 roles = listOf("maintainer", "developer")
                 properties = mapOf("github" to "StefanOltmann")
             }

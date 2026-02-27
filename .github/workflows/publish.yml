@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: zulu
-          java-version: '17'
+          java-version: '25'
           cache: gradle
 
       - name: Build
@@ -34,7 +34,7 @@ jobs:
       - name: List files
         run: |
           Get-ChildItem -Force build\libs\
-          
+
       - name: Set RELEASE_VERSION variable
         run: |
           $version = Get-Content build\version.txt
@@ -47,7 +47,7 @@ jobs:
           if-no-files-found: error
           name: msstorelib.jar
           path: build\libs\msstorelib-${{ env.RELEASE_VERSION }}.jar
-        
+
       - name: Publish to Maven Central
         if: startsWith(github.ref, 'refs/tags/') # Only for releases
         run: .\gradlew publishToMavenCentral --no-configuration-cache
