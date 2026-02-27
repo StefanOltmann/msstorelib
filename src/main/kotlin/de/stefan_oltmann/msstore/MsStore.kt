@@ -18,9 +18,10 @@ package de.stefan_oltmann.msstore
 
 import de.stefan_oltmann.msstore.model.MsStoreLicenseInfo
 import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
+import de.stefan_oltmann.msstore.model.MsStoreRateAndReviewStatus
 
 /**
- * Public API entry-point for Microsoft Store license info and purchases.
+ * Public API entry-point for Microsoft Store license info and UI actions.
  */
 public object MsStore {
 
@@ -47,4 +48,15 @@ public object MsStore {
      */
     public fun requestPurchase(storeId: String): MsStorePurchaseStatus =
         MsStorePurchase.requestPurchase(storeId)
+
+    /**
+     * Shows the Microsoft Store rate-and-review dialog for the current app.
+     *
+     * This must be called while the app has a focused UI window so the native
+     * layer can attach the Store dialog to the foreground HWND.
+     *
+     * @throws MsStoreLicenseException when the native call fails.
+     */
+    public fun requestRateAndReview(): MsStoreRateAndReviewStatus =
+        MsStoreRateAndReview.requestRateAndReview()
 }

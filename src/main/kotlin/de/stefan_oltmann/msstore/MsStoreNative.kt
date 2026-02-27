@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Stefan Oltmann
+ * https://github.com/StefanOltmann/msstorelib
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package de.stefan_oltmann.msstore
 
 import java.lang.foreign.Arena
@@ -33,6 +49,14 @@ internal object MsStoreNative {
         symbolName = "msstore_winrt_request_purchase",
         descriptor = FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
     )
+
+    /** Handle for `int msstore_winrt_request_rate_and_review()`. */
+    private val requestRateAndReviewHandle: MethodHandle by lazy(LazyThreadSafetyMode.NONE) {
+        downcall(
+            symbolName = "msstore_winrt_request_rate_and_review",
+            descriptor = FunctionDescriptor.of(ValueLayout.JAVA_INT)
+        )
+    }
 
     /** Handle for `void msstore_winrt_free(const char*)`. */
     private val freeHandle: MethodHandle = downcall(
@@ -70,6 +94,14 @@ internal object MsStoreNative {
 
             requestPurchaseHandle.invoke(nativeStoreId) as Int
         }
+
+    /**
+     * Calls into msstore_winrt_request_rate_and_review.
+     *
+     * Returns a status code (see [de.stefan_oltmann.msstore.model.MsStoreRateAndReviewStatus]) or -1 on failure.
+     */
+    fun requestRateAndReview(): Int =
+        requestRateAndReviewHandle.invoke() as Int
 
     /**
      * Frees a pointer returned by the native layer.

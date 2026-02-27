@@ -17,26 +17,24 @@
 package de.stefan_oltmann.msstore.model
 
 /**
- * Result status for a Microsoft Store purchase request.
+ * Result status for a Microsoft Store rate-and-review request.
  *
- * Names are aligned with Windows.Services.Store.StorePurchaseStatus for clarity.
+ * Names are aligned with Windows.Services.Store.StoreRateAndReviewStatus for clarity.
  */
-public enum class MsStorePurchaseStatus {
+public enum class MsStoreRateAndReviewStatus {
 
     Succeeded,
-    AlreadyPurchased,
-    NotPurchased,
+    CanceledByUser,
     NetworkError,
-    ServerError,
+    Error,
     Unknown;
 
     internal companion object {
-        fun fromNativeCode(code: Int): MsStorePurchaseStatus = when (code) {
+        fun fromNativeCode(code: Int): MsStoreRateAndReviewStatus = when (code) {
             0 -> Succeeded
-            1 -> AlreadyPurchased
-            2 -> NotPurchased
-            3 -> NetworkError
-            4 -> ServerError
+            1 -> CanceledByUser
+            2 -> NetworkError
+            3 -> Error
             else -> Unknown
         }
     }

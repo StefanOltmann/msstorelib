@@ -64,6 +64,47 @@ static int map_purchase_status(StorePurchaseStatus status) {
 }
 
 /*
+ * Maps StoreRateAndReviewStatus into stable numeric codes exposed to the JVM.
+ */
+static int map_rate_and_review_status(StoreRateAndReviewStatus status) {
+
+    switch (status) {
+        case StoreRateAndReviewStatus::Succeeded:
+            return 0;
+        case StoreRateAndReviewStatus::CanceledByUser:
+            return 1;
+        case StoreRateAndReviewStatus::NetworkError:
+            return 2;
+        case StoreRateAndReviewStatus::Error:
+            return 3;
+        default:
+            return 4;
+    }
+}
+
+/*
+ * Initializes the Store UI owner window for desktop modal dialogs.
+ */
+static bool initialize_store_ui_owner(const StoreContext& context) {
+
+    HWND ownerWindow = ::GetForegroundWindow();
+
+    if (ownerWindow == nullptr) {
+        g_lastError = "No foreground window handle available for Store UI.";
+        return false;
+    }
+
+    /*
+     * Desktop apps must provide an owner HWND for Store modal UI.
+     * This avoids ERROR_INVALID_WINDOW_HANDLE and UI-thread errors.
+     */
+    auto initWindow = context.as<IInitializeWithWindow>();
+    initWindow->Initialize(ownerWindow);
+
+    return true;
+}
+
+/*
  * Returns StoreAppLicense.ExtendedJsonData as UTF-8 JSON, or nullptr on error.
  *
  * The call blocks until the async Store API completes; this keeps the native
@@ -134,19 +175,9 @@ extern "C" MSSTORE_WINRT_API int msstore_winrt_request_purchase(const char* stor
 
         StoreContext context = StoreContext::GetDefault();
 
-        HWND ownerWindow = ::GetForegroundWindow();
-
-        if (ownerWindow == nullptr) {
-            g_lastError = "No foreground window handle available for Store UI.";
+        if (!initialize_store_ui_owner(context)) {
             return -1;
         }
-
-        /*
-         * Desktop apps must provide an owner HWND for Store modal UI.
-         * This avoids ERROR_INVALID_WINDOW_HANDLE and UI-thread errors.
-         */
-        auto initWindow = context.as<IInitializeWithWindow>();
-        initWindow->Initialize(ownerWindow);
 
         StorePurchaseResult result =
             context.RequestPurchaseAsync(to_hstring(std::string_view(storeId))).get();
@@ -159,6 +190,45 @@ extern "C" MSSTORE_WINRT_API int msstore_winrt_request_purchase(const char* stor
         g_lastError.clear();
 
         return map_purchase_status(result.Status());
+
+    } catch (const hresult_error& ex) {
+        g_lastError = to_string(ex.message());
+    } catch (const std::exception& ex) {
+        g_lastError = ex.what();
+    } catch (...) {
+        g_lastError = "Unknown native error.";
+    }
+
+    return -1;
+}
+
+/*
+ * Shows the rating and review dialog for the current app.
+ *
+ * Returns a stable status code for the JVM or -1 on error.
+ */
+extern "C" MSSTORE_WINRT_API int msstore_winrt_request_rate_and_review() {
+
+    try {
+
+        init_apartment(apartment_type::single_threaded);
+
+        StoreContext context = StoreContext::GetDefault();
+
+        if (!initialize_store_ui_owner(context)) {
+            return -1;
+        }
+
+        StoreRateAndReviewResult result = context.RequestRateAndReviewAppAsync().get();
+
+        if (!result) {
+            g_lastError = "StoreRateAndReviewResult is null.";
+            return -1;
+        }
+
+        g_lastError.clear();
+
+        return map_rate_and_review_status(result.Status());
 
     } catch (const hresult_error& ex) {
         g_lastError = to_string(ex.message());

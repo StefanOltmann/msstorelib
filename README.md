@@ -4,7 +4,7 @@
 ![JVM 25](https://img.shields.io/badge/-JVM-gray.svg?style=flat)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-gray?&logo=GitHub-Sponsors&logoColor=EA4AAA)](https://github.com/sponsors/StefanOltmann)
 
-Kotlin/JVM library for Microsoft Store license info and in-app purchases.
+Kotlin/JVM library for Microsoft Store license info and Store UI actions.
 
 The JVM calls a small C++/WinRT DLL (`msstore_winrt.dll`) via Java FFM (Panama).
 
@@ -13,6 +13,7 @@ The JVM calls a small C++/WinRT DLL (`msstore_winrt.dll`) via Java FFM (Panama).
 - Query the Store license JSON (`ExtendedJsonData`).
 - Parse a stable subset of license fields into Kotlin data classes.
 - Trigger the Store purchase UI for add-ons or other in-app products.
+- Trigger the Store rate-and-review dialog for the current app.
 - Native DLL loading with override, app-local, system-path, and embedded fallback resolution.
 
 ## Install from Maven Central
@@ -23,7 +24,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.2.0")
+    implementation("de.stefan-oltmann:msstorelib:0.3.0")
 }
 ```
 
@@ -67,7 +68,7 @@ fun main() {
 
 ```kotlin
 import de.stefan_oltmann.msstore.MsStore
-import de.stefan_oltmann.msstore.MsStorePurchaseStatus
+import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 
 val status = MsStore.requestPurchase("9p9hdfltk63l")
 
@@ -87,11 +88,36 @@ when (status) {
 The native layer assigns the current foreground window as the owner HWND for
 Store modal UI. Ensure your app has a focused window when requesting purchases.
 
+### Rate and review
+
+```kotlin
+import de.stefan_oltmann.msstore.MsStore
+import de.stefan_oltmann.msstore.model.MsStoreRateAndReviewStatus
+
+val status = MsStore.requestRateAndReview()
+
+when (status) {
+    MsStoreRateAndReviewStatus.Succeeded -> {
+        /* Dialog completed successfully */
+    }
+    MsStoreRateAndReviewStatus.CanceledByUser -> {
+        /* User dismissed the dialog */
+    }
+    else -> {
+        /* Show error */
+    }
+}
+```
+
+For packaged desktop apps, Microsoft documents this API as a UI-thread call.
+Ensure your app has a focused window when requesting the dialog.
+
 ## API model types
 
 - `MsStoreLicenseInfo` (app license summary)
 - `MsStoreAddOnLicenseInfo` (add-on license entries)
 - `MsStorePurchaseStatus` (purchase result status)
+- `MsStoreRateAndReviewStatus` (rate-and-review result status)
 
 ## Error handling
 
@@ -161,5 +187,21 @@ This builds the DLL and copies it to:
   https://learn.microsoft.com/windows/uwp/monetize/get-license-info-for-apps-and-add-ons
 - Store JSON schema reference (`ExtendedJsonData`):
   https://learn.microsoft.com/windows/uwp/monetize/data-schemas-for-store-products
+- Enable in-app purchases of apps and add-ons:
+  https://learn.microsoft.com/en-us/windows/uwp/monetize/enable-in-app-purchases-of-apps-and-add-ons
+- RequestPurchaseAsync API reference:
+  https://learn.microsoft.com/en-us/uwp/api/windows.services.store.storecontext.requestpurchaseasync
+- StorePurchaseStatus API reference:
+  https://learn.microsoft.com/en-us/uwp/api/windows.services.store.storepurchasestatus
+- Request ratings and reviews:
+  https://learn.microsoft.com/en-us/windows/uwp/monetize/request-ratings-and-reviews
+- RequestRateAndReviewAppAsync API reference:
+  https://learn.microsoft.com/en-us/uwp/api/windows.services.store.storecontext.requestrateandreviewappasync
+- StoreRateAndReviewStatus API reference:
+  https://learn.microsoft.com/en-us/uwp/api/windows.services.store.storerateandreviewstatus
 - StoreContext API:
   https://learn.microsoft.com/uwp/api/windows.services.store.storecontext
+- Display WinRT UI objects that depend on CoreWindow:
+  https://learn.microsoft.com/en-us/windows/apps/develop/ui/display-ui-objects
+- IInitializeWithWindow interface:
+  https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-iinitializewithwindow

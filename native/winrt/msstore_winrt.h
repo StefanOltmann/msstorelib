@@ -57,6 +57,21 @@ extern "C" {
     MSSTORE_WINRT_API int msstore_winrt_request_purchase(const char* storeId);
 
     /*
+     * Shows the rating and review dialog for the current app.
+     *
+     * Returns a status code (0..4) that maps to MsStoreRateAndReviewStatus:
+     * 0 = Succeeded
+     * 1 = CanceledByUser
+     * 2 = NetworkError
+     * 3 = Error
+     * 4 = Unknown
+     *
+     * On failure: returns -1. Use msstore_winrt_get_last_error() to read
+     * the error message (allocated with CoTaskMemAlloc).
+     */
+    MSSTORE_WINRT_API int msstore_winrt_request_rate_and_review();
+
+    /*
      * Frees memory allocated by msstore_winrt_get_license_json() or
      * msstore_winrt_get_last_error().
      */
