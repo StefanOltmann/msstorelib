@@ -16,56 +16,59 @@
  */
 package de.stefan_oltmann.msstore.model
 
-import kotlinx.serialization.Serializable
-
 /**
- * Subset of Store app license fields returned by `ExtendedJsonData`.
+ * Subset of Store app license fields returned by the native WinRT API.
  *
- * All fields are modeled as strings and booleans to keep parsing stable across
- * schema revisions. Dates are returned as ISO-8601 or Store-formatted strings.
+ * Fields are modeled as Kotlin primitives/strings plus a list of add-on entries
+ * to keep parsing stable across schema revisions. Date values are returned as
+ * Unix timestamps (milliseconds).
  *
- * The defaults allow parsing to succeed even when fields are missing, which
- * is common for trial or legacy licenses.
- *
- * @property productId Store product identifier.
- * @property skuId SKU identifier.
- * @property expiration Expiration date string.
- * @property isActive Whether the license is active.
- * @property isTrial Whether the license is a trial.
- * @property isTrialOwnedByThisUser Whether the trial is owned by this user.
- * @property trialTimeRemaining Trial time remaining string.
- * @property inAppOfferToken Offer token when relevant.
- * @property productAddOns Add-on licenses included in the payload.
- *
- * @see https://learn.microsoft.com/windows/uwp/monetize/data-schemas-for-store-products
+ * @see https://learn.microsoft.com/uwp/api/windows.services.store.storeapplicense
  */
-@Serializable
 public data class MsStoreLicenseInfo(
 
-    /** Product identifier as defined in the Store catalog. */
-    val productId: String = "",
+    /**
+     * Store ID of the licensed app SKU from the Microsoft Store catalog.
+     */
+    val skuStoreId: String = "",
 
-    /** SKU identifier for the purchased or installed SKU. */
-    val skuId: String = "",
-
-    /** Expiration time if the license is time-limited (trial or subscription). */
-    val expiration: String = "",
-
-    /** Whether the license is currently active. */
+    /**
+     * Value that indicates whether the license is valid and provides
+     * the current user with an entitlement to use the app.
+     */
     val isActive: Boolean = false,
 
-    /** Whether the license is a trial license. */
+    /**
+     * Value that indicates whether the license is a trial license.
+     */
     val isTrial: Boolean = false,
 
-    /** Whether the current user owns the trial license. */
+    /**
+     * Value that indicates whether the current user has an entitlement
+     * for the usage-limited trial that is associated with this app license.
+     */
     val isTrialOwnedByThisUser: Boolean = false,
 
-    /** Remaining trial duration, often in ISO-8601 duration format. */
-    val trialTimeRemaining: String = "",
+    /**
+     * Remaining time for the usage-limited trial that
+     * is associated with this app license in milliseconds.
+     */
+    val trialTimeRemaining: Long = 0,
 
-    /** Offer token if the license was acquired through an in-app offer. */
-    val inAppOfferToken: String = "",
+    /**
+     * Expiration date and time for the app license as timestamp in milliseconds.
+     */
+    val expirationDate: Long = 0,
 
-    /** List of add-on licenses attached to the main product. */
-    val productAddOns: List<MsStoreAddOnLicenseInfo> = emptyList()
+    /**
+     * Unique ID that identifies the combination of the current user and
+     * the usage-limited trial that is associated with this app license.
+     */
+    val trialUniqueId: String = "",
+
+    /**
+     * Collection of licenses for durable add-ons for which the user has entitlements to use.
+     * This property does not include licenses for consumable add-ons.
+     */
+    val addOnLicenses: List<MsStoreAddOnLicenseInfo> = emptyList()
 )

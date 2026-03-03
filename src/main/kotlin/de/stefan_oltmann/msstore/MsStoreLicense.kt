@@ -16,8 +16,10 @@
  */
 package de.stefan_oltmann.msstore
 
+import de.stefan_oltmann.msstore.model.MsStoreAddOnLicenseInfo
 import de.stefan_oltmann.msstore.model.MsStoreLicenseInfo
-import kotlinx.serialization.json.Json
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 
 /**
  * Internal entry-point for retrieving Microsoft Store license info.
@@ -25,57 +27,115 @@ import kotlinx.serialization.json.Json
  * Implementation overview:
  * - FFM (Panama) loads `msstore_winrt.dll` (C++/WinRT).
  * - The C++/WinRT DLL calls `StoreContext.GetAppLicenseAsync()` and returns
- *   the `ExtendedJsonData` string for parsing on the JVM.
+ *   the data directly.
  *
  * @see https://learn.microsoft.com/windows/uwp/monetize/get-license-info-for-apps-and-add-ons
  */
 internal object MsStoreLicense {
 
-    /*
-     * JSON parser configured for forward-compatible schema changes.
+    private const val MSSTORE_LICENSE_NATIVE_SIZE = 56L
+    private const val MSSTORE_ADDON_LICENSE_NATIVE_SIZE = 24L
+
+    /**
+     * Returns the current app license info.
      *
-     * The Store schema can evolve without notice, so we ignore unknown fields
-     * to keep parsing resilient across Windows and Store API updates.
+     * @throws MsStoreLicenseException when the native call fails.
      */
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
+    fun getLicenseInfo(): MsStoreLicenseInfo {
+
+        val pointer = MsStoreNative.getLicense()
+
+        if (pointer == null) {
+            val errorText = MsStoreNativeHelpers.readLastError()
+            throw MsStoreLicenseException(errorText ?: "Native license query failed.")
+        }
+
+        try {
+            return readLicenseInfo(pointer)
+        } finally {
+            MsStoreNative.freeLicense(pointer)
+        }
     }
 
-    /**
-     * Returns the current app license info parsed from the Store JSON payload.
-     *
-     * @throws MsStoreLicenseException when the native call fails.
-     */
-    fun getLicenseInfo(): MsStoreLicenseInfo =
-        parseLicenseJson(getLicenseJson())
+    private fun readLicenseInfo(pointer: MemorySegment): MsStoreLicenseInfo {
 
-    /**
-     * Parses a license JSON payload into a strongly-typed model.
-     *
-     * This is intentionally small and deterministic so tests can validate the
-     * JSON mapping behavior without requiring a Store call.
-     */
-    fun parseLicenseJson(jsonText: String): MsStoreLicenseInfo =
-        json.decodeFromString(jsonText)
+        val licenseStruct = pointer.reinterpret(MSSTORE_LICENSE_NATIVE_SIZE)
 
-    /**
-     * Returns the raw JSON license payload as returned by the Store API.
-     *
-     * @throws MsStoreLicenseException when the native call fails.
-     */
-    fun getLicenseJson(): String {
+        /*
+         * Layout must match the C struct MsStoreLicenseNative:
+         * 0: SkuStoreId (ADDRESS)
+         * 8: IsActive (BYTE/BOOL)
+         * 9: IsTrial (BYTE/BOOL)
+         * 10: IsTrialOwnedByThisUser (BYTE/BOOL)
+         * 11: (Padding to align int64)
+         * 16: TrialTimeRemaining (LONG)
+         * 24: ExpirationDate (LONG)
+         * 32: TrialUniqueId (ADDRESS)
+         * 40: AddOnLicenses (ADDRESS)
+         * 48: AddOnLicensesCount (INT)
+         * (Padding to 56?)
+         */
 
-        /* First, request the license payload. A null pointer indicates failure. */
-        val jsonPointer = MsStoreNative.getLicenseJson()
+        val skuStoreId = readString(licenseStruct, 0)
+        val isActive = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 8)
+        val isTrial = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 9)
+        val isTrialOwnedByThisUser = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 10)
+        val trialTimeRemaining = licenseStruct.get(ValueLayout.JAVA_LONG, 16)
+        val expirationDate = licenseStruct.get(ValueLayout.JAVA_LONG, 24)
+        val trialUniqueId = readString(licenseStruct, 32)
+        val addOnLicensesPointer = licenseStruct.get(ValueLayout.ADDRESS, 40)
+        val addOnLicensesCount = licenseStruct.get(ValueLayout.JAVA_INT, 48)
 
-        val jsonText = MsStoreNativeHelpers.readUtf8AndFree(jsonPointer)
+        val addOns = mutableListOf<MsStoreAddOnLicenseInfo>()
 
-        if (jsonText != null)
-            return jsonText
+        if (addOnLicensesPointer.address() != 0L && addOnLicensesCount > 0) {
 
-        /* If the payload is null, ask the native layer for the error string. */
-        val errorText = MsStoreNativeHelpers.readLastError()
+            val addOnLicensesStructArray =
+                addOnLicensesPointer.reinterpret(addOnLicensesCount.toLong() * MSSTORE_ADDON_LICENSE_NATIVE_SIZE)
 
-        throw MsStoreLicenseException(errorText ?: "Native license query failed.")
+            for (index in 0 until addOnLicensesCount) {
+
+                /* Struct size: 2 pointers (2*8) + int64 expiration (8) = 24. */
+                val offset = index * MSSTORE_ADDON_LICENSE_NATIVE_SIZE
+
+                addOns.add(readAddOnLicenseInfo(addOnLicensesStructArray, offset))
+            }
+        }
+
+        return MsStoreLicenseInfo(
+            skuStoreId = skuStoreId ?: "",
+            expirationDate = expirationDate,
+            isActive = isActive,
+            isTrial = isTrial,
+            isTrialOwnedByThisUser = isTrialOwnedByThisUser,
+            trialTimeRemaining = trialTimeRemaining,
+            trialUniqueId = trialUniqueId ?: "",
+            addOnLicenses = addOns
+        )
+    }
+
+    private fun readAddOnLicenseInfo(pointer: MemorySegment, offset: Long): MsStoreAddOnLicenseInfo {
+
+        /*
+         * Layout must match MsStoreAddOnLicenseNative:
+         * 0: SkuStoreId (ADDRESS)
+         * 8: InAppOfferToken (ADDRESS)
+         * 16: ExpirationDate (LONG)
+         */
+        return MsStoreAddOnLicenseInfo(
+            skuStoreId = readString(pointer, offset + 0) ?: "",
+            inAppOfferToken = readString(pointer, offset + 8) ?: "",
+            expirationDate = pointer.get(ValueLayout.JAVA_LONG, offset + 16)
+        )
+    }
+
+    private fun readString(pointer: MemorySegment, offset: Long): String? {
+
+        val address = pointer.get(ValueLayout.ADDRESS, offset)
+
+        if (address.address() == 0L)
+            return null
+
+        return MsStoreNativeHelpers.readStringFromAddress(address)
     }
 }

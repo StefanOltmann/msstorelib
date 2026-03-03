@@ -16,6 +16,7 @@
  */
 package de.stefan_oltmann.msstore
 
+import de.stefan_oltmann.msstore.MsStoreNativeHelpers.readUtf8AndFree
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.nio.charset.StandardCharsets
@@ -54,6 +55,20 @@ internal object MsStoreNativeHelpers {
         readUtf8AndFree(MsStoreNative.getLastError())
 
     /**
+     * Reads a null-terminated UTF-8 string from the given native address.
+     *
+     * This does NOT free the pointer, as the pointer is typically owned by a
+     * parent struct (e.g. MsStoreLicenseNative).
+     */
+    fun readStringFromAddress(addressSegment: MemorySegment): String? {
+
+        if (addressSegment.address() == 0L)
+            return null
+
+        return readNullTerminatedUtf8(addressSegment)
+    }
+
+    /**
      * Decodes a null-terminated UTF-8 C string from native memory.
      *
      * The native side allocates these strings with CoTaskMemAlloc and returns a
@@ -68,9 +83,8 @@ internal object MsStoreNativeHelpers {
         var length = 0L
 
         /* Find terminating '\0'. */
-        while (length < MAX_C_STRING_BYTES && cString.get(ValueLayout.JAVA_BYTE, length).toInt() != 0) {
+        while (length < MAX_C_STRING_BYTES && cString.get(ValueLayout.JAVA_BYTE, length).toInt() != 0)
             length++
-        }
 
         /* Abort if no terminator was found in the allowed scan window. */
         if (length == MAX_C_STRING_BYTES)

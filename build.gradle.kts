@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.maven.publish)
     alias(libs.plugins.git.versioning)
 }
@@ -36,9 +35,6 @@ repositories {
 }
 
 dependencies {
-
-    /* JSON parsing for Store license payloads. */
-    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(kotlin("test"))
 }

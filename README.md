@@ -1,7 +1,7 @@
 # msstorelib
 
 ![Kotlin](https://img.shields.io/badge/kotlin-2.3.10-blue.svg?logo=kotlin)
-![JVM 25](https://img.shields.io/badge/-JVM-gray.svg?style=flat)
+![Java 25+](https://img.shields.io/badge/Java-25%2B-gray.svg?style=flat)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-gray?&logo=GitHub-Sponsors&logoColor=EA4AAA)](https://github.com/sponsors/StefanOltmann)
 
 Kotlin/JVM library for Microsoft Store license info and in-app purchases.
@@ -10,8 +10,8 @@ The JVM calls a small C++/WinRT DLL (`msstore_winrt.dll`) via Java FFM (Panama).
 
 ## Features
 
-- Query the Store license JSON (`ExtendedJsonData`).
-- Parse a stable subset of license fields into Kotlin data classes.
+- Query the Store license fields directly from WinRT.
+- A stable subset of license fields in Kotlin data classes.
 - Trigger the Store purchase UI for add-ons or other in-app products.
 - Native DLL loading with override, app-local, system-path, and embedded fallback resolution.
 
@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.2.0")
+    implementation("de.stefan-oltmann:msstorelib:0.3.0")
 }
 ```
 
@@ -39,21 +39,16 @@ fun main() {
 
     try {
 
-        val json = MsStore.getLicenseJson()
-        println("Raw JSON from Store:")
-        println(json)
-
         val info = MsStore.getLicenseInfo()
-        println()
-        println("Parsed summary:")
-        println("productId  = ${info.productId}")
-        println("skuId      = ${info.skuId}")
+        println("License summary:")
+        println("skuStoreId = ${info.skuStoreId}")
         println("isActive   = ${info.isActive}")
         println("isTrial    = ${info.isTrial}")
-        println("expiration = ${info.expiration}")
+        println("expirationDate = ${info.expirationDate}")
+        println("trialTimeRemaining = ${info.trialTimeRemaining}")
 
-        if (info.productAddOns.isNotEmpty())
-            println("addOns     = ${info.productAddOns.size}")
+        if (info.addOnLicenses.isNotEmpty())
+            println("addOns     = ${info.addOnLicenses.size}")
 
     } catch (ex: MsStoreLicenseException) {
         System.err.println("Store license query failed: ${ex.message}")
@@ -67,7 +62,7 @@ fun main() {
 
 ```kotlin
 import de.stefan_oltmann.msstore.MsStore
-import de.stefan_oltmann.msstore.MsStorePurchaseStatus
+import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 
 val status = MsStore.requestPurchase("9p9hdfltk63l")
 
@@ -103,7 +98,7 @@ Store modal UI. Ensure your app has a focused window when requesting purchases.
 - Windows 10/11
 - App packaged with MSIX and a Microsoft Store identity
 - Product associated in Partner Center
-- Using Java 25 or higher
+- Java 25 or higher
 
 If these requirements are not met, Store APIs can return empty results or errors.
 
@@ -159,7 +154,5 @@ This builds the DLL and copies it to:
 
 - Get license info for apps and add-ons:
   https://learn.microsoft.com/windows/uwp/monetize/get-license-info-for-apps-and-add-ons
-- Store JSON schema reference (`ExtendedJsonData`):
-  https://learn.microsoft.com/windows/uwp/monetize/data-schemas-for-store-products
 - StoreContext API:
   https://learn.microsoft.com/uwp/api/windows.services.store.storecontext

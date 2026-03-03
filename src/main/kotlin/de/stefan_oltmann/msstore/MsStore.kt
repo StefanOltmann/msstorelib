@@ -25,20 +25,12 @@ import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 public object MsStore {
 
     /**
-     * Returns the current app license info parsed from the Store JSON payload.
+     * Returns the current app license info.
      *
      * @throws MsStoreLicenseException when the native call fails.
      */
     public fun getLicenseInfo(): MsStoreLicenseInfo =
         MsStoreLicense.getLicenseInfo()
-
-    /**
-     * Returns the raw JSON license payload as returned by the Store API.
-     *
-     * @throws MsStoreLicenseException when the native call fails.
-     */
-    public fun getLicenseJson(): String =
-        MsStoreLicense.getLicenseJson()
 
     /**
      * Requests a purchase for the given Store product ID.

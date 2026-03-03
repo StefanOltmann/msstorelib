@@ -1,5 +1,7 @@
 package de.stefan_oltmann.msstore
 
+import de.stefan_oltmann.msstore.MsStoreNative.free
+import de.stefan_oltmann.msstore.MsStoreNative.freeLicense
 import java.lang.foreign.Arena
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.Linker
@@ -16,10 +18,16 @@ internal object MsStoreNative {
     /** Entrypoint for creating downcall handles to native symbols. */
     private val linker: Linker = Linker.nativeLinker()
 
-    /** Handle for `const char* msstore_winrt_get_license_json()`. */
-    private val getLicenseJsonHandle: MethodHandle = downcall(
-        symbolName = "msstore_winrt_get_license_json",
+    /** Handle for `MsStoreLicenseNative* msstore_winrt_get_license()`. */
+    private val getLicenseHandle: MethodHandle = downcall(
+        symbolName = "msstore_winrt_get_license",
         descriptor = FunctionDescriptor.of(ValueLayout.ADDRESS)
+    )
+
+    /** Handle for `void msstore_winrt_free_license(MsStoreLicenseNative*)`. */
+    private val freeLicenseHandle: MethodHandle = downcall(
+        symbolName = "msstore_winrt_free_license",
+        descriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
     )
 
     /** Handle for `const char* msstore_winrt_get_last_error()`. */
@@ -41,13 +49,13 @@ internal object MsStoreNative {
     )
 
     /**
-     * Calls into msstore_winrt_get_license_json.
+     * Calls into msstore_winrt_get_license.
      *
-     * Returns a pointer to UTF-8 JSON allocated with CoTaskMemAlloc on success.
-     * The caller must free it by calling [free].
+     * Returns a pointer to MsStoreLicenseNative on success.
+     * The caller must free it by calling [freeLicense].
      */
-    fun getLicenseJson(): MemorySegment? =
-        nullIfNullAddress(getLicenseJsonHandle.invoke() as MemorySegment)
+    fun getLicense(): MemorySegment? =
+        nullIfNullAddress(getLicenseHandle.invoke() as MemorySegment)
 
     /**
      * Calls into msstore_winrt_get_last_error.
@@ -72,10 +80,22 @@ internal object MsStoreNative {
         }
 
     /**
+     * Frees a pointer returned by msstore_winrt_get_license.
+     */
+    fun freeLicense(nativeMemorySegment: MemorySegment?) {
+
+        if (nativeMemorySegment == null)
+            return
+
+        freeLicenseHandle.invoke(nativeMemorySegment)
+    }
+
+    /**
      * Frees a pointer returned by the native layer.
      *
-     * This must be used for both JSON payloads and error messages to avoid
-     * leaking native memory in the JVM process.
+     * This must be used for strings returned by native functions (for example
+     * from `msstore_winrt_get_last_error`) to avoid leaking native memory in
+     * the JVM process.
      */
     fun free(nativeMemorySegment: MemorySegment?) {
 

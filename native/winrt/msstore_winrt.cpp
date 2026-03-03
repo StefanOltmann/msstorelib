@@ -3,11 +3,14 @@
 #include <windows.h>
 #include <objbase.h>
 #include <ShObjIdl_core.h>
+#include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <string_view>
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Services.Store.h>
 
 using namespace winrt;
@@ -33,9 +36,8 @@ static const char* dup_string(const std::string& value) {
 
     char* buffer = static_cast<char*>(::CoTaskMemAlloc(size));
 
-    if (buffer == nullptr) {
+    if (buffer == nullptr)
         return nullptr;
-    }
 
     std::memcpy(buffer, value.c_str(), size);
 
@@ -63,13 +65,32 @@ static int map_purchase_status(StorePurchaseStatus status) {
     }
 }
 
+/* Converts a WinRT DateTime to Unix epoch milliseconds */
+static int64_t to_unix_epoch_millis(winrt::Windows::Foundation::DateTime dateTime)
+{
+    /* Convert WinRT DateTime (ticks since 1601) to system_clock time_point */
+    const auto sysTime = winrt::clock::to_sys(dateTime);
+
+    /* Convert to milliseconds since Unix epoch */
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        sysTime.time_since_epoch()
+    ).count();
+}
+
+/* Converts WinRT TimeSpan to milliseconds */
+static int64_t timespan_to_millis(winrt::Windows::Foundation::TimeSpan ts)
+{
+    /* 1 tick = 100 ns = 0.0001 ms */
+    return ts.count() / 10000;
+}
+
 /*
- * Returns StoreAppLicense.ExtendedJsonData as UTF-8 JSON, or nullptr on error.
+ * Returns the StoreAppLicense information directly, or nullptr on error.
  *
- * The call blocks until the async Store API completes; this keeps the native
- * API surface synchronous for the JVM, which then parses JSON on its side.
+ * The returned pointer and all nested strings/arrays are allocated with
+ * CoTaskMemAlloc and must be released via msstore_winrt_free_license().
  */
-extern "C" MSSTORE_WINRT_API const char* msstore_winrt_get_license_json() {
+extern "C" MSSTORE_WINRT_API MsStoreLicenseNative* msstore_winrt_get_license() {
 
     try {
 
@@ -90,11 +111,57 @@ extern "C" MSSTORE_WINRT_API const char* msstore_winrt_get_license_json() {
             return nullptr;
         }
 
-        std::string json = to_string(license.ExtendedJsonData());
+        MsStoreLicenseNative* licensePointer =
+            static_cast<MsStoreLicenseNative*>(::CoTaskMemAlloc(sizeof(MsStoreLicenseNative)));
+
+        if (licensePointer == nullptr) {
+            g_lastError = "Out of memory allocating MsStoreLicenseNative.";
+            return nullptr;
+        }
+
+        std::memset(licensePointer, 0, sizeof(MsStoreLicenseNative));
+
+        licensePointer->SkuStoreId = dup_string(to_string(license.SkuStoreId()));
+        licensePointer->IsActive = license.IsActive();
+        licensePointer->IsTrial = license.IsTrial();
+        licensePointer->IsTrialOwnedByThisUser = license.IsTrialOwnedByThisUser();
+        licensePointer->TrialTimeRemaining = timespan_to_millis(license.TrialTimeRemaining());
+        licensePointer->ExpirationDate = to_unix_epoch_millis(license.ExpirationDate());
+        licensePointer->TrialUniqueId = dup_string(to_string(license.TrialUniqueId()));
+
+        auto addOnLicenses = license.AddOnLicenses();
+        licensePointer->AddOnLicensesCount = static_cast<int>(addOnLicenses.Size());
+
+        if (licensePointer->AddOnLicensesCount > 0) {
+
+            licensePointer->AddOnLicenses = static_cast<MsStoreAddOnLicenseNative*>(
+                ::CoTaskMemAlloc(sizeof(MsStoreAddOnLicenseNative) * licensePointer->AddOnLicensesCount));
+
+            if (licensePointer->AddOnLicenses == nullptr) {
+
+                licensePointer->AddOnLicensesCount = 0;
+
+            } else {
+
+                std::memset(licensePointer->AddOnLicenses, 0,
+                            sizeof(MsStoreAddOnLicenseNative) * licensePointer->AddOnLicensesCount);
+
+                int index = 0;
+                for (auto const& pair : addOnLicenses) {
+                    auto const& addOn = pair.Value();
+                    licensePointer->AddOnLicenses[index].SkuStoreId = dup_string(to_string(addOn.SkuStoreId()));
+                    licensePointer->AddOnLicenses[index].InAppOfferToken = dup_string(to_string(addOn.InAppOfferToken()));
+                    licensePointer->AddOnLicenses[index].ExpirationDate = to_unix_epoch_millis(addOn.ExpirationDate());
+                    index++;
+                }
+            }
+        } else {
+            licensePointer->AddOnLicenses = nullptr;
+        }
 
         g_lastError.clear();
 
-        return dup_string(json);
+        return licensePointer;
 
     } catch (const hresult_error& ex) {
         g_lastError = to_string(ex.message());
@@ -105,15 +172,6 @@ extern "C" MSSTORE_WINRT_API const char* msstore_winrt_get_license_json() {
     }
 
     return nullptr;
-}
-
-/*
- * Returns the last error string for the current thread.
- *
- * The return value is always a new allocation so the caller can safely free it.
- */
-extern "C" MSSTORE_WINRT_API const char* msstore_winrt_get_last_error() {
-    return dup_string(g_lastError);
 }
 
 /*
@@ -172,11 +230,39 @@ extern "C" MSSTORE_WINRT_API int msstore_winrt_request_purchase(const char* stor
 }
 
 /*
+ * Frees memory allocated by msstore_winrt_get_license().
+ */
+extern "C" MSSTORE_WINRT_API void msstore_winrt_free_license(MsStoreLicenseNative* pointer) {
+
+    if (pointer == nullptr)
+        return;
+
+    msstore_winrt_free(pointer->SkuStoreId);
+    msstore_winrt_free(pointer->TrialUniqueId);
+
+    if (pointer->AddOnLicenses != nullptr) {
+        for (int index = 0; index < pointer->AddOnLicensesCount; ++index) {
+            msstore_winrt_free(pointer->AddOnLicenses[index].SkuStoreId);
+            msstore_winrt_free(pointer->AddOnLicenses[index].InAppOfferToken);
+        }
+        ::CoTaskMemFree(pointer->AddOnLicenses);
+    }
+
+    ::CoTaskMemFree(pointer);
+}
+
+/*
  * Frees a pointer allocated by dup_string (and therefore by CoTaskMemAlloc).
  */
-extern "C" MSSTORE_WINRT_API void msstore_winrt_free(const char* ptr) {
+extern "C" MSSTORE_WINRT_API void msstore_winrt_free(const char* pointer) {
 
-    if (ptr != nullptr) {
-        ::CoTaskMemFree(reinterpret_cast<LPVOID>(const_cast<char*>(ptr)));
-    }
+    if (pointer != nullptr)
+        ::CoTaskMemFree(reinterpret_cast<LPVOID>(const_cast<char*>(pointer)));
+}
+
+/*
+ * Returns the last error message for the current thread as UTF-8 text.
+ */
+extern "C" MSSTORE_WINRT_API const char* msstore_winrt_get_last_error() {
+    return dup_string(g_lastError);
 }

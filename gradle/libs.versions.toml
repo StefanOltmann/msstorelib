@@ -1,14 +1,9 @@
 [versions]
 kotlin = "2.3.10"
-kotlinx-serialization = "1.9.0"
 git-versioning = "6.4.4"
 maven-publish = "0.36.0"
 
-[libraries]
-kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
-
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 git-versioning = { id = "me.qoomon.git-versioning", version.ref = "git-versioning" }
 maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
