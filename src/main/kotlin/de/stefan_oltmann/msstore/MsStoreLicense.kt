@@ -33,7 +33,7 @@ import java.lang.foreign.ValueLayout
  */
 internal object MsStoreLicense {
 
-    private const val MSSTORE_LICENSE_NATIVE_SIZE = 56L
+    private const val MSSTORE_LICENSE_NATIVE_SIZE = 40L
     private const val MSSTORE_ADDON_LICENSE_NATIVE_SIZE = 24L
 
     /**
@@ -66,25 +66,19 @@ internal object MsStoreLicense {
          * 0: SkuStoreId (ADDRESS)
          * 8: IsActive (BYTE/BOOL)
          * 9: IsTrial (BYTE/BOOL)
-         * 10: IsTrialOwnedByThisUser (BYTE/BOOL)
-         * 11: (Padding to align int64)
-         * 16: TrialTimeRemaining (LONG)
-         * 24: ExpirationDate (LONG)
-         * 32: TrialUniqueId (ADDRESS)
-         * 40: AddOnLicenses (ADDRESS)
-         * 48: AddOnLicensesCount (INT)
-         * (Padding to 56?)
+         * 10-15: (Padding to align int64)
+         * 16: ExpirationDate (LONG)
+         * 24: AddOnLicenses (ADDRESS)
+         * 32: AddOnLicensesCount (INT)
+         * (Padding to 40)
          */
 
         val skuStoreId = readString(licenseStruct, 0)
         val isActive = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 8)
         val isTrial = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 9)
-        val isTrialOwnedByThisUser = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 10)
-        val trialTimeRemaining = licenseStruct.get(ValueLayout.JAVA_LONG, 16)
-        val expirationDate = licenseStruct.get(ValueLayout.JAVA_LONG, 24)
-        val trialUniqueId = readString(licenseStruct, 32)
-        val addOnLicensesPointer = licenseStruct.get(ValueLayout.ADDRESS, 40)
-        val addOnLicensesCount = licenseStruct.get(ValueLayout.JAVA_INT, 48)
+        val expirationDate = licenseStruct.get(ValueLayout.JAVA_LONG, 16)
+        val addOnLicensesPointer = licenseStruct.get(ValueLayout.ADDRESS, 24)
+        val addOnLicensesCount = licenseStruct.get(ValueLayout.JAVA_INT, 32)
 
         val addOns = mutableListOf<MsStoreAddOnLicenseInfo>()
 
@@ -107,9 +101,6 @@ internal object MsStoreLicense {
             expirationDate = expirationDate,
             isActive = isActive,
             isTrial = isTrial,
-            isTrialOwnedByThisUser = isTrialOwnedByThisUser,
-            trialTimeRemaining = trialTimeRemaining,
-            trialUniqueId = trialUniqueId ?: "",
             addOnLicenses = addOns
         )
     }

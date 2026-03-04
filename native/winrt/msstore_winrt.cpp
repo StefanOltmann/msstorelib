@@ -66,8 +66,8 @@ static int map_purchase_status(StorePurchaseStatus status) {
 }
 
 /* Converts a WinRT DateTime to Unix epoch milliseconds */
-static int64_t to_unix_epoch_millis(winrt::Windows::Foundation::DateTime dateTime)
-{
+static int64_t to_unix_epoch_millis(winrt::Windows::Foundation::DateTime dateTime) {
+
     /* Convert WinRT DateTime (ticks since 1601) to system_clock time_point */
     const auto sysTime = winrt::clock::to_sys(dateTime);
 
@@ -75,13 +75,6 @@ static int64_t to_unix_epoch_millis(winrt::Windows::Foundation::DateTime dateTim
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         sysTime.time_since_epoch()
     ).count();
-}
-
-/* Converts WinRT TimeSpan to milliseconds */
-static int64_t timespan_to_millis(winrt::Windows::Foundation::TimeSpan ts)
-{
-    /* 1 tick = 100 ns = 0.0001 ms */
-    return ts.count() / 10000;
 }
 
 /*
@@ -124,10 +117,7 @@ extern "C" MSSTORE_WINRT_API MsStoreLicenseNative* msstore_winrt_get_license() {
         licensePointer->SkuStoreId = dup_string(to_string(license.SkuStoreId()));
         licensePointer->IsActive = license.IsActive();
         licensePointer->IsTrial = license.IsTrial();
-        licensePointer->IsTrialOwnedByThisUser = license.IsTrialOwnedByThisUser();
-        licensePointer->TrialTimeRemaining = timespan_to_millis(license.TrialTimeRemaining());
         licensePointer->ExpirationDate = to_unix_epoch_millis(license.ExpirationDate());
-        licensePointer->TrialUniqueId = dup_string(to_string(license.TrialUniqueId()));
 
         auto addOnLicenses = license.AddOnLicenses();
         licensePointer->AddOnLicensesCount = static_cast<int>(addOnLicenses.Size());
@@ -238,13 +228,14 @@ extern "C" MSSTORE_WINRT_API void msstore_winrt_free_license(MsStoreLicenseNativ
         return;
 
     msstore_winrt_free(pointer->SkuStoreId);
-    msstore_winrt_free(pointer->TrialUniqueId);
 
     if (pointer->AddOnLicenses != nullptr) {
+
         for (int index = 0; index < pointer->AddOnLicensesCount; ++index) {
             msstore_winrt_free(pointer->AddOnLicenses[index].SkuStoreId);
             msstore_winrt_free(pointer->AddOnLicenses[index].InAppOfferToken);
         }
+
         ::CoTaskMemFree(pointer->AddOnLicenses);
     }
 

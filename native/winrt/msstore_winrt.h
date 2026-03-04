@@ -44,10 +44,7 @@ extern "C" {
         const char* SkuStoreId;
         bool IsActive;
         bool IsTrial;
-        bool IsTrialOwnedByThisUser;
-        int64_t TrialTimeRemaining;
         int64_t ExpirationDate;
-        const char* TrialUniqueId;
         MsStoreAddOnLicenseNative* AddOnLicenses;
         int AddOnLicensesCount;
     } MsStoreLicenseNative;

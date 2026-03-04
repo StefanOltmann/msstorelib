@@ -44,27 +44,9 @@ public data class MsStoreLicenseInfo(
     val isTrial: Boolean = false,
 
     /**
-     * Value that indicates whether the current user has an entitlement
-     * for the usage-limited trial that is associated with this app license.
-     */
-    val isTrialOwnedByThisUser: Boolean = false,
-
-    /**
-     * Remaining time for the usage-limited trial that
-     * is associated with this app license in milliseconds.
-     */
-    val trialTimeRemaining: Long = 0,
-
-    /**
      * Expiration date and time for the app license as timestamp in milliseconds.
      */
     val expirationDate: Long = 0,
-
-    /**
-     * Unique ID that identifies the combination of the current user and
-     * the usage-limited trial that is associated with this app license.
-     */
-    val trialUniqueId: String = "",
 
     /**
      * Collection of licenses for durable add-ons for which the user has entitlements to use.

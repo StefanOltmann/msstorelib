@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.3.0")
+    implementation("de.stefan-oltmann:msstorelib:0.4.0")
 }
 ```
 
@@ -45,7 +45,6 @@ fun main() {
         println("isActive   = ${info.isActive}")
         println("isTrial    = ${info.isTrial}")
         println("expirationDate = ${info.expirationDate}")
-        println("trialTimeRemaining = ${info.trialTimeRemaining}")
 
         if (info.addOnLicenses.isNotEmpty())
             println("addOns     = ${info.addOnLicenses.size}")
@@ -87,6 +86,10 @@ Store modal UI. Ensure your app has a focused window when requesting purchases.
 - `MsStoreLicenseInfo` (app license summary)
 - `MsStoreAddOnLicenseInfo` (add-on license entries)
 - `MsStorePurchaseStatus` (purchase result status)
+
+Note: `isTrialOwnedByThisUser`, `trialUniqueId`, and `trialTimeRemaining` are
+intentionally not exposed in the API model to avoid false expectations because
+they are not used by the MS Store API.
 
 ## Error handling
 
