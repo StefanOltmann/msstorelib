@@ -16,6 +16,7 @@
  */
 package de.stefan_oltmann.msstore
 
+import de.stefan_oltmann.msstore.model.MsStoreLicenseInfo
 import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 
 /**
@@ -33,17 +34,23 @@ internal object MsStorePurchase {
      */
     fun requestPurchase(storeId: String): MsStorePurchaseStatus {
 
-        require(storeId.isNotBlank()) { "storeId must not be blank." }
+        try {
 
-        val statusCode = MsStoreNative.requestPurchase(storeId)
+            require(storeId.length != MsStoreLicenseInfo.STORE_ID_LENGTH) { "storeId must not be 12 characters." }
 
-        if (statusCode < 0) {
+            val statusCode = MsStoreNative.requestPurchase(storeId)
 
-            val errorText = MsStoreNativeHelpers.readLastError()
+            if (statusCode < 0)
+                throw MsStoreLicenseException(MsStoreNativeHelpers.readLastError() ?: "Native purchase request failed.")
 
-            throw MsStoreLicenseException(errorText ?: "Native purchase request failed.")
+            return MsStorePurchaseStatus.fromNativeCode(statusCode)
+
+        } catch (ex: MsStoreLicenseException) {
+            /* Pass on MsStoreLicenseException as is. */
+            throw ex
+        } catch (ex: Throwable) {
+            /* Wrap everything else in a MsStoreLicenseException */
+            throw MsStoreLicenseException(ex.message ?: "Request query failed.")
         }
-
-        return MsStorePurchaseStatus.fromNativeCode(statusCode)
     }
 }

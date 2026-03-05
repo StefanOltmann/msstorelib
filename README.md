@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.4.0")
+    implementation("de.stefan-oltmann:msstorelib:0.5.0")
 }
 ```
 
@@ -41,13 +41,12 @@ fun main() {
 
         val info = MsStore.getLicenseInfo()
         println("License summary:")
-        println("skuStoreId = ${info.skuStoreId}")
-        println("isActive   = ${info.isActive}")
-        println("isTrial    = ${info.isTrial}")
+        println("storeId        = ${info.storeId}")
+        println("skuId          = ${info.skuId}")
+        println("isActive       = ${info.isActive}")
+        println("isTrial        = ${info.isTrial}")
         println("expirationDate = ${info.expirationDate}")
-
-        if (info.addOnLicenses.isNotEmpty())
-            println("addOns     = ${info.addOnLicenses.size}")
+        println("addOns         = ${info.addOnLicenses.size}")
 
     } catch (ex: MsStoreLicenseException) {
         System.err.println("Store license query failed: ${ex.message}")
@@ -63,7 +62,7 @@ fun main() {
 import de.stefan_oltmann.msstore.MsStore
 import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 
-val status = MsStore.requestPurchase("9p9hdfltk63l")
+val status = MsStore.requestPurchase("9ND96XCDZRGB")
 
 when (status) {
     MsStorePurchaseStatus.Succeeded -> {

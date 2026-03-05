@@ -24,9 +24,18 @@ package de.stefan_oltmann.msstore.model
 public data class MsStoreAddOnLicenseInfo(
 
     /**
-     * Store ID of the licensed add-on SKU from the Microsoft Store catalog
+     * Store ID of the licensed app SKU from the Microsoft Store catalog.
+     *
+     * If installed from the MS Store, this is a 12-character alphanumeric string like 9ND96XCDZRGB.
+     * This value is empty if it's not installed from the MS Store.
      */
-    val skuStoreId: String = "",
+    val storeId: String = "",
+
+    /**
+     * The SKU ID is a 4-character alphanumeric number that describes the installed version.
+     * Release versions often are "0010", but a trial version could have another number.
+     */
+    val skuId: String = "",
 
     /**
      * Product ID for the add-on.

@@ -67,7 +67,7 @@ internal object MsStoreNativeLoader {
     /**
      * Loads the native DLL using a strict fallback chain.
      *
-     * Extraction from classpath is only attempted as the final fallback.
+     * Extraction from the classpath is only attempted as the final fallback.
      */
     private fun loadNativeLibrary() {
 
@@ -232,7 +232,7 @@ internal object MsStoreNativeLoader {
         return Path.of(
             tempRoot,
             CACHE_ROOT_DIR,
-            sanitizePathSegment(LIB_VERSION),
+            getSanitizedLibVersion(),
             PLATFORM_RESOURCE_DIR,
             DLL_FILE_NAME
         )
@@ -244,8 +244,8 @@ internal object MsStoreNativeLoader {
      * This keeps the cache path stable even if version strings contain
      * characters that are problematic in directory names.
      */
-    private fun sanitizePathSegment(value: String): String =
-        value
+    private fun getSanitizedLibVersion(): String =
+        LIB_VERSION
             .ifBlank { "dev" }
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
 }

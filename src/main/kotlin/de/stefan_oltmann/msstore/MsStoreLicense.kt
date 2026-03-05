@@ -43,17 +43,23 @@ internal object MsStoreLicense {
      */
     fun getLicenseInfo(): MsStoreLicenseInfo {
 
-        val pointer = MsStoreNative.getLicense()
-
-        if (pointer == null) {
-            val errorText = MsStoreNativeHelpers.readLastError()
-            throw MsStoreLicenseException(errorText ?: "Native license query failed.")
-        }
-
         try {
-            return readLicenseInfo(pointer)
-        } finally {
-            MsStoreNative.freeLicense(pointer)
+
+            val pointer = MsStoreNative.getLicense()
+                ?: throw MsStoreLicenseException(MsStoreNativeHelpers.readLastError() ?: "Native license query failed.")
+
+            try {
+                return readLicenseInfo(pointer)
+            } finally {
+                MsStoreNative.freeLicense(pointer)
+            }
+
+        } catch (ex: MsStoreLicenseException) {
+            /* Pass on MsStoreLicenseException as is. */
+            throw ex
+        } catch (ex: Throwable) {
+            /* Wrap everything else in a MsStoreLicenseException */
+            throw MsStoreLicenseException(ex.message ?: "License query failed.")
         }
     }
 
@@ -73,7 +79,8 @@ internal object MsStoreLicense {
          * (Padding to 40)
          */
 
-        val skuStoreId = readString(licenseStruct, 0)
+        val skuStoreId = readString(licenseStruct, 0) ?: ""
+
         val isActive = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 8)
         val isTrial = licenseStruct.get(ValueLayout.JAVA_BOOLEAN, 9)
         val expirationDate = licenseStruct.get(ValueLayout.JAVA_LONG, 16)
@@ -96,8 +103,22 @@ internal object MsStoreLicense {
             }
         }
 
+        /*
+         * SkuStoreId is a combination of Store ID and SKU ID.
+         * It looks like this: "9ND96XCDZRGB/0100"
+         * It's only set if installed from the MS Store.
+         *
+         * We split this into two fields for easier handling:
+         * The first 12 characters must be the Store ID.
+         * The rest after the separator will be the SKU ID.
+         */
+
+        val storeId = skuStoreId.take(MsStoreLicenseInfo.STORE_ID_LENGTH)
+        val skuId = skuStoreId.drop(MsStoreLicenseInfo.STORE_ID_LENGTH + 1)
+
         return MsStoreLicenseInfo(
-            skuStoreId = skuStoreId ?: "",
+            storeId = storeId,
+            skuId = skuId,
             expirationDate = expirationDate,
             isActive = isActive,
             isTrial = isTrial,
@@ -113,10 +134,18 @@ internal object MsStoreLicense {
          * 8: InAppOfferToken (ADDRESS)
          * 16: ExpirationDate (LONG)
          */
+        val skuStoreId = readString(pointer, offset + 0) ?: ""
+        val inAppOfferToken = readString(pointer, offset + 8) ?: ""
+        val expirationDate = pointer.get(ValueLayout.JAVA_LONG, offset + 16)
+
+        val storeId = skuStoreId.take(MsStoreLicenseInfo.STORE_ID_LENGTH)
+        val skuId = skuStoreId.drop(MsStoreLicenseInfo.STORE_ID_LENGTH + 1)
+
         return MsStoreAddOnLicenseInfo(
-            skuStoreId = readString(pointer, offset + 0) ?: "",
-            inAppOfferToken = readString(pointer, offset + 8) ?: "",
-            expirationDate = pointer.get(ValueLayout.JAVA_LONG, offset + 16)
+            storeId = storeId,
+            skuId = skuId,
+            inAppOfferToken = inAppOfferToken,
+            expirationDate = expirationDate
         )
     }
 

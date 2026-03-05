@@ -40,12 +40,15 @@ internal object MsStoreNativeHelpers {
         if (nativeStringSegment == null)
             return null
 
-        val value = readNullTerminatedUtf8(nativeStringSegment)
+        return try {
 
-        /* Always free native allocations to avoid leaking in the JVM process. */
-        MsStoreNative.free(nativeStringSegment)
+            readNullTerminatedUtf8(nativeStringSegment)
 
-        return value
+        } finally {
+
+            /* Always free native allocations to avoid leaking in the JVM process. */
+            MsStoreNative.free(nativeStringSegment)
+        }
     }
 
     /**
@@ -58,7 +61,7 @@ internal object MsStoreNativeHelpers {
      * Reads a null-terminated UTF-8 string from the given native address.
      *
      * This does NOT free the pointer, as the pointer is typically owned by a
-     * parent struct (e.g. MsStoreLicenseNative).
+     * parent struct (e.g., MsStoreLicenseNative).
      */
     fun readStringFromAddress(addressSegment: MemorySegment): String? {
 
