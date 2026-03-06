@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.5.0")
+    implementation("de.stefan-oltmann:msstorelib:0.5.1")
 }
 ```
 
