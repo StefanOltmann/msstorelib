@@ -16,7 +16,7 @@
  */
 package de.stefan_oltmann.msstore
 
-import de.stefan_oltmann.msstore.model.MsStoreLicenseInfo
+import de.stefan_oltmann.msstore.model.MsStoreLicenseInfo.Companion.STORE_ID_LENGTH
 import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 
 /**
@@ -36,7 +36,9 @@ internal object MsStorePurchase {
 
         try {
 
-            require(storeId.length != MsStoreLicenseInfo.STORE_ID_LENGTH) { "storeId must not be 12 characters." }
+            /* Prevent wrong use */
+            if (storeId.length != STORE_ID_LENGTH)
+                throw MsStoreLicenseException("Store ID must be 12 characters long.")
 
             val statusCode = MsStoreNative.requestPurchase(storeId)
 
