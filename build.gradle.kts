@@ -44,8 +44,16 @@ kotlin {
     /* Ensure public API is explicitly marked. */
     explicitApi()
 
-    /* We use Java 25, because it comes with FFM. */
+    /* We use Java 25 because it comes with FFM. */
     jvmToolchain(25)
+
+    compilerOptions {
+
+        /* Make the code safer */
+        progressiveMode = true
+        extraWarnings = true
+        allWarningsAsErrors = true
+    }
 
     sourceSets["main"].kotlin.srcDirs(
         file("build/generated/src/main/kotlin/")

@@ -1,6 +1,6 @@
 # msstorelib
 
-![Kotlin](https://img.shields.io/badge/kotlin-2.3.10-blue.svg?logo=kotlin)
+![Kotlin](https://img.shields.io/badge/kotlin-2.3.20-blue.svg?logo=kotlin)
 ![Java 25+](https://img.shields.io/badge/Java-25%2B-gray.svg?style=flat)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-gray?&logo=GitHub-Sponsors&logoColor=EA4AAA)](https://github.com/sponsors/StefanOltmann)
 
@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.5.1")
+    implementation("de.stefan-oltmann:msstorelib:0.5.2")
 }
 ```
 
