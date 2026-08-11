@@ -44,6 +44,7 @@ public data class MsStoreAddOnLicenseInfo(
 
     /**
      * Expiration date and time for the add-on license.
+     * A value of 0 means the add-on license does not expire.
      */
     val expirationDate: Long = 0
 )

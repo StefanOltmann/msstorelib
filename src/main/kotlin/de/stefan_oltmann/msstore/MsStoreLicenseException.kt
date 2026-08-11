@@ -17,9 +17,13 @@
 package de.stefan_oltmann.msstore
 
 /**
- * Thrown when a native Store call fails (license query or purchase request).
+ * The only exception type thrown by the public msstorelib API.
  *
  * The message is a best-effort string from the native layer, which can include
- * WinRT error messages or fallback text.
+ * WinRT error messages or fallback text. The cause preserves the original
+ * error, so no failure is ever silently lost.
  */
-public class MsStoreLicenseException(message: String) : RuntimeException(message)
+public class MsStoreLicenseException(
+    message: String,
+    cause: Throwable? = null
+) : RuntimeException(message, cause)

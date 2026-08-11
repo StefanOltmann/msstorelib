@@ -16,8 +16,6 @@
  */
 package de.stefan_oltmann.msstore
 
-import de.stefan_oltmann.msstore.MsStoreNative.free
-import de.stefan_oltmann.msstore.MsStoreNative.freeLicense
 import java.lang.foreign.Arena
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.Linker

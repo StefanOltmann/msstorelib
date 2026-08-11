@@ -56,6 +56,7 @@ public data class MsStoreLicenseInfo(
 
     /**
      * Expiration date and time for the app license as timestamp in milliseconds.
+     * A value of 0 means the license does not expire.
      */
     val expirationDate: Long = 0,
 
@@ -69,9 +70,10 @@ public data class MsStoreLicenseInfo(
 
     /**
      * Convenience property to indicate if the expiration date is in the past.
+     * A non-positive value means the license does not expire.
      */
     val isExpired: Boolean =
-        expirationDate != 0L && System.currentTimeMillis() >= expirationDate
+        expirationDate > 0L && System.currentTimeMillis() >= expirationDate
 
     /**
      * Convenience property to indicate an installation from MS Store.
@@ -79,38 +81,39 @@ public data class MsStoreLicenseInfo(
     val isInstalledFromStore: Boolean =
         skuId.isNotEmpty()
 
-    /**
-     * Helper method to quickly check the state.
-     */
-    public fun check(storeId: String): MsStoreLicenseStatus {
-
-        /* Prevent wrong use */
-        if (storeId.length != STORE_ID_LENGTH)
-            throw MsStoreLicenseException("Store ID must be 12 characters long.")
-
-        /* Not installed from a store or wrong product */
-        if (!isInstalledFromStore || !this.storeId.equals(storeId, ignoreCase = true))
-            return MsStoreLicenseStatus.NotInStore
-
-        /* Trial logic */
-        if (isTrial) {
-
-            return if (isExpired || !isActive)
-                MsStoreLicenseStatus.ExpiredTrial
-            else
-                MsStoreLicenseStatus.Trial
-        }
-
-        /* Full license logic */
-        if (isActive && !isExpired)
-            return MsStoreLicenseStatus.Licensed
-
-        return MsStoreLicenseStatus.Expired
-    }
-
     internal companion object {
 
         const val STORE_ID_LENGTH = 12
-        const val SKU_ID_LENGTH = 4
     }
+}
+
+/**
+ * Returns the license status of this license for the given product ID.
+ *
+ * @throws MsStoreLicenseException when the store ID has an invalid length.
+ */
+public fun MsStoreLicenseInfo.check(storeId: String): MsStoreLicenseStatus {
+
+    /* Prevent wrong use */
+    if (storeId.length != MsStoreLicenseInfo.STORE_ID_LENGTH)
+        throw MsStoreLicenseException("Store ID must be 12 characters long.")
+
+    /* Not installed from a store or wrong product */
+    if (!isInstalledFromStore || !this.storeId.equals(storeId, ignoreCase = true))
+        return MsStoreLicenseStatus.NotInStore
+
+    /* Trial logic */
+    if (isTrial) {
+
+        return if (isExpired || !isActive)
+            MsStoreLicenseStatus.ExpiredTrial
+        else
+            MsStoreLicenseStatus.Trial
+    }
+
+    /* Full license logic */
+    if (isActive && !isExpired)
+        return MsStoreLicenseStatus.Licensed
+
+    return MsStoreLicenseStatus.Expired
 }

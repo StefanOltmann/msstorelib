@@ -21,11 +21,20 @@ import de.stefan_oltmann.msstore.model.MsStorePurchaseStatus
 
 /**
  * Public API entry-point for Microsoft Store license info and purchases.
+ *
+ * Every method throws [MsStoreLicenseException] exclusively. Underlying
+ * errors, including native failures and JVM errors, are always preserved as
+ * the exception's cause.
  */
 public object MsStore {
 
     /**
      * Returns the current app license info.
+     *
+     * This blocks the calling thread until the Store answers; the native
+     * layer aborts the query after 30 seconds when the Store service does
+     * not respond. Call it from a background thread and keep the UI
+     * thread responsive.
      *
      * @throws MsStoreLicenseException when the native call fails.
      */
@@ -34,6 +43,17 @@ public object MsStore {
 
     /**
      * Requests a purchase for the given Store product ID.
+     *
+     * This blocks until the Store dialog closes. Keep the app's UI thread
+     * responsive while the dialog is open, so do not wait for the result on a
+     * background thread while the UI thread is blocked. The native layer
+     * picks the owner window automatically: a visible window on the calling
+     * thread, the foreground window of this process, or any visible window of
+     * this process.
+     *
+     * The calling thread must run in a single-threaded COM apartment (STA).
+     * If other JVM or native code already initialized the calling thread as
+     * multi-threaded (MTA), the call fails with a clear error.
      *
      * @throws MsStoreLicenseException when the native call fails.
      */

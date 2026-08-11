@@ -31,13 +31,16 @@ public enum class MsStorePurchaseStatus {
     Unknown;
 
     internal companion object {
-        fun fromNativeCode(code: Int): MsStorePurchaseStatus = when (code) {
-            0 -> Succeeded
-            1 -> AlreadyPurchased
-            2 -> NotPurchased
-            3 -> NetworkError
-            4 -> ServerError
-            else -> Unknown
-        }
+
+        /**
+         * Maps the native status code to the matching enum entry.
+         *
+         * The native codes follow the declaration order of
+         * Windows.Services.Store.StorePurchaseStatus, so reordering the
+         * entries breaks this mapping. The mapping is guarded by
+         * MsStorePurchaseStatusTest.
+         */
+        fun fromNativeCode(code: Int): MsStorePurchaseStatus =
+            entries.getOrNull(code) ?: Unknown
     }
 }

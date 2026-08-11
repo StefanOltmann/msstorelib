@@ -17,9 +17,11 @@
 package de.stefan_oltmann.msstore
 
 import java.lang.foreign.SymbolLookup
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 
 /**
  * Loads the C++/WinRT shared library.
@@ -68,6 +70,9 @@ internal object MsStoreNativeLoader {
      * Loads the native DLL using a strict fallback chain.
      *
      * Extraction from the classpath is only attempted as the final fallback.
+     * A DLL that exists but fails to load (for example a corrupt or
+     * wrong-architecture file) does not stop the chain; only the explicit
+     * override fails fast, because it is a deliberate user choice.
      */
     private fun loadNativeLibrary() {
 
@@ -79,34 +84,60 @@ internal object MsStoreNativeLoader {
             return
         }
 
-        /* 2) Try DLL next to the host app. */
+        /* Errors of the automatic steps, attached to the final failure. */
+        val fallbackLoadErrors = mutableListOf<UnsatisfiedLinkError>()
+
+        /* 2) Try DLL next to the host app; a load failure continues with the fallbacks. */
         val localPath = resolveAppLocalDllPath()
 
         if (localPath != null) {
-            System.load(localPath)
-            return
+            try {
+                System.load(localPath)
+                return
+            } catch (error: UnsatisfiedLinkError) {
+                fallbackLoadErrors.add(error)
+            }
         }
 
         /* 3) Try standard java.library.path lookup. */
         val systemLoadError = tryLoadFromSystemLibraryPath() ?: return
+
+        fallbackLoadErrors.add(systemLoadError)
 
         /*
          * 4) Final fallback: extract bundled DLL to a versioned cache path and
          *    load from there.
          */
         val extractedPath = extractEmbeddedDllToVersionedCache()
-            ?: throw UnsatisfiedLinkError(
-                "Could not load '$LIB_NAME'. " +
-                    "Checked override path, local app folder, java.library.path, " +
-                    "and embedded resource '$EMBEDDED_RESOURCE'."
-            ).also { it.addSuppressed(systemLoadError) }
+            ?: throw attachFallbackErrors(
+                UnsatisfiedLinkError(
+                    "Could not load '$LIB_NAME'. " +
+                        "Checked override path, local app folder, java.library.path, " +
+                        "and embedded resource '$EMBEDDED_RESOURCE'."
+                ),
+                fallbackLoadErrors
+            )
 
         try {
             System.load(extractedPath)
         } catch (extractLoadError: UnsatisfiedLinkError) {
-            extractLoadError.addSuppressed(systemLoadError)
-            throw extractLoadError
+            throw attachFallbackErrors(extractLoadError, fallbackLoadErrors)
         }
+    }
+
+    /**
+     * Returns the given error with all fallback load errors attached as
+     * suppressed exceptions, so every step of the chain stays visible.
+     */
+    internal fun attachFallbackErrors(
+        error: UnsatisfiedLinkError,
+        fallbackLoadErrors: List<UnsatisfiedLinkError>
+    ): UnsatisfiedLinkError {
+
+        for (fallbackError in fallbackLoadErrors)
+            error.addSuppressed(fallbackError)
+
+        return error
     }
 
     /**
@@ -130,7 +161,7 @@ internal object MsStoreNativeLoader {
      * - folder containing the running jar/classes
      * - current working directory
      */
-    private fun resolveAppLocalDllPath(): String? {
+    internal fun resolveAppLocalDllPath(): String? {
 
         val candidates = sequenceOf(
             resolveJPackageDllPath(),
@@ -146,7 +177,7 @@ internal object MsStoreNativeLoader {
     }
 
     /** Returns `<jpackage app folder>/msstore_winrt.dll`, if jpackage is used. */
-    private fun resolveJPackageDllPath(): Path? {
+    internal fun resolveJPackageDllPath(): Path? {
 
         val appPath = System.getProperty("jpackage.app-path")?.takeIf { it.isNotBlank() }
             ?: return null
@@ -155,7 +186,7 @@ internal object MsStoreNativeLoader {
     }
 
     /** Returns `<jar-or-classes folder>/msstore_winrt.dll`. */
-    private fun resolveJarFolderDllPath(): Path? {
+    internal fun resolveJarFolderDllPath(): Path? {
 
         val codeSource = MsStoreNativeLoader::class.java.protectionDomain?.codeSource?.location
             ?: return null
@@ -175,7 +206,7 @@ internal object MsStoreNativeLoader {
     }
 
     /** Returns `<working directory>/msstore_winrt.dll`. */
-    private fun resolveWorkingDirDllPath(): Path? {
+    internal fun resolveWorkingDirDllPath(): Path? {
 
         val workingDir = System.getProperty("user.dir")
             ?.takeIf { it.isNotBlank() }
@@ -191,38 +222,102 @@ internal object MsStoreNativeLoader {
      * Cache path format:
      * `<tmp>/msstorelib-native/<LIB_VERSION>/windows-x86_64/msstore_winrt.dll`
      *
-     * If the file already exists for the same LIB_VERSION, it is reused and no
-     * extraction is performed.
+     * An existing cache file is reused only when its content matches the
+     * embedded resource, so truncated or tampered files are re-extracted.
+     * Extraction writes to a temporary file first and then moves it into
+     * place, so concurrent callers never observe partial content.
      *
      * Returns null when the resource is missing or extraction fails.
      */
     private fun extractEmbeddedDllToVersionedCache(): String? =
         runCatching {
 
+            val embeddedDll = readEmbeddedDll() ?: return@runCatching null
+
             val cacheDllPath = resolveVersionedCacheDllPath()
 
-            /* Reuse an existing extracted binary for this library version. */
-            if (Files.isRegularFile(cacheDllPath) && Files.size(cacheDllPath) > 0L)
-                return@runCatching cacheDllPath.toAbsolutePath().toString()
-
-            val input = MsStoreNativeLoader::class.java.classLoader
-                .getResourceAsStream(EMBEDDED_RESOURCE)
-                ?: return@runCatching null
-
-            input.use { stream ->
-                /* Ensure versioned cache directories exist before copy. */
-                Files.createDirectories(cacheDllPath.parent)
-                Files.copy(stream, cacheDllPath, StandardCopyOption.REPLACE_EXISTING)
-            }
+            extractToCache(cacheDllPath, embeddedDll)
 
             cacheDllPath.toAbsolutePath().toString()
 
         }.getOrNull()
 
     /**
+     * Ensures the cache path holds the given DLL content.
+     *
+     * An existing file is reused only when it is byte-identical to the given
+     * bytes; otherwise the file is replaced atomically.
+     */
+    internal fun extractToCache(cacheDllPath: Path, embeddedDll: ByteArray) {
+
+        if (isSameContent(cacheDllPath, embeddedDll))
+            return
+
+        writeDllAtomically(cacheDllPath, embeddedDll)
+    }
+
+    /**
+     * Returns the embedded DLL bytes, or null when the resource is missing.
+     */
+    private fun readEmbeddedDll(): ByteArray? =
+        MsStoreNativeLoader::class.java.classLoader
+            .getResourceAsStream(EMBEDDED_RESOURCE)
+            ?.use { stream -> stream.readBytes() }
+
+    /**
+     * Returns true when the file exists and is byte-identical to the embedded DLL.
+     */
+    private fun isSameContent(cacheDllPath: Path, embeddedDll: ByteArray): Boolean {
+
+        if (!Files.isRegularFile(cacheDllPath))
+            return false
+
+        if (Files.size(cacheDllPath) != embeddedDll.size.toLong())
+            return false
+
+        return sha256(Files.readAllBytes(cacheDllPath)) contentEquals sha256(embeddedDll)
+    }
+
+    /**
+     * Writes the DLL to a temporary file and moves it into place.
+     *
+     * The cache path only ever receives fully written content, even when
+     * multiple processes or threads extract concurrently.
+     */
+    private fun writeDllAtomically(cacheDllPath: Path, embeddedDll: ByteArray) {
+
+        /* Ensure versioned cache directories exist before extraction. */
+        Files.createDirectories(cacheDllPath.parent)
+
+        val tempFile = Files.createTempFile(cacheDllPath.parent, DLL_FILE_NAME, ".tmp")
+
+        try {
+
+            Files.write(tempFile, embeddedDll)
+
+            try {
+                Files.move(tempFile, cacheDllPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: FileSystemException) {
+                /* Fall back to a plain replace when the platform rejects
+                   atomic moves onto existing targets. */
+                Files.move(tempFile, cacheDllPath, StandardCopyOption.REPLACE_EXISTING)
+            }
+
+        } finally {
+            Files.deleteIfExists(tempFile)
+        }
+    }
+
+    /**
+     * SHA-256 digest of the given bytes, used to verify extracted cache files.
+     */
+    private fun sha256(bytes: ByteArray): ByteArray =
+        MessageDigest.getInstance("SHA-256").digest(bytes)
+
+    /**
      * Computes the cache file path for the current library version.
      */
-    private fun resolveVersionedCacheDllPath(): Path {
+    internal fun resolveVersionedCacheDllPath(): Path {
 
         val tempRoot = System.getProperty("java.io.tmpdir")
             ?.takeIf { it.isNotBlank() }
@@ -232,7 +327,7 @@ internal object MsStoreNativeLoader {
         return Path.of(
             tempRoot,
             CACHE_ROOT_DIR,
-            getSanitizedLibVersion(),
+            sanitizeVersion(LIB_VERSION),
             PLATFORM_RESOURCE_DIR,
             DLL_FILE_NAME
         )
@@ -244,8 +339,19 @@ internal object MsStoreNativeLoader {
      * This keeps the cache path stable even if version strings contain
      * characters that are problematic in directory names.
      */
-    private fun getSanitizedLibVersion(): String =
-        LIB_VERSION
+    internal fun sanitizeVersion(version: String): String =
+        version
             .ifBlank { "dev" }
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
 }
+
+/**
+ * Launch instructions for users whose JVM blocks the restricted FFM calls.
+ *
+ * Since JDK 24 (JEP 472) restricted methods require explicit opt-in; a
+ * future JDK will block them by default.
+ */
+internal const val NATIVE_ACCESS_HELP_MESSAGE: String =
+    "Native access is not enabled for msstorelib. Start the JVM with " +
+        "'--enable-native-access=ALL-UNNAMED' (or '--enable-native-access=msstorelib' when the " +
+        "library is on the module path) to allow the required FFM calls."

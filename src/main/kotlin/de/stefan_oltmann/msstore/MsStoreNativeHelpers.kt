@@ -16,12 +16,14 @@
  */
 package de.stefan_oltmann.msstore
 
-import de.stefan_oltmann.msstore.MsStoreNativeHelpers.readUtf8AndFree
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.nio.charset.StandardCharsets
 
 internal object MsStoreNativeHelpers {
+
+    /** Number of bytes in one mebibyte, used for size limits and messages. */
+    private const val BYTES_PER_MEBIBYTE: Long = 1024L * 1024L
 
     /**
      * Hard limit when scanning a native C string for its null terminator.
@@ -29,7 +31,7 @@ internal object MsStoreNativeHelpers {
      * This prevents accidental unbounded reads if a native pointer is invalid or
      * not properly null-terminated.
      */
-    private const val MAX_C_STRING_BYTES: Long = 16L * 1024L * 1024L
+    internal const val MAX_C_STRING_BYTES: Long = 16L * BYTES_PER_MEBIBYTE
 
     /**
      * Reads a UTF-8 string from native memory and frees the pointer using the
@@ -58,6 +60,33 @@ internal object MsStoreNativeHelpers {
         readUtf8AndFree(MsStoreNative.getLastError())
 
     /**
+     * Returns the user-facing message for a native initialization failure.
+     *
+     * A blocked restricted API (JEP 472) yields the launch-option help text;
+     * otherwise the most specific message in the cause chain is used, so DLL
+     * load errors stay visible in the exception message. Falls back to the
+     * given text when no cause carries a message.
+     */
+    fun initFailureMessage(fallback: String, initError: ExceptionInInitializerError): String {
+
+        var current: Throwable? = initError
+        var mostSpecificMessage: String? = null
+
+        while (current != null) {
+
+            if (current is IllegalCallerException)
+                return NATIVE_ACCESS_HELP_MESSAGE
+
+            if (!current.message.isNullOrBlank())
+                mostSpecificMessage = current.message
+
+            current = current.cause
+        }
+
+        return mostSpecificMessage ?: fallback
+    }
+
+    /**
      * Reads a null-terminated UTF-8 string from the given native address.
      *
      * This does NOT free the pointer, as the pointer is typically owned by a
@@ -78,7 +107,7 @@ internal object MsStoreNativeHelpers {
      * pointer. This method only decodes bytes; releasing memory is handled by
      * [readUtf8AndFree].
      */
-    private fun readNullTerminatedUtf8(nativeStringSegment: MemorySegment): String {
+    internal fun readNullTerminatedUtf8(nativeStringSegment: MemorySegment): String {
 
         /* Treat pointer as a bounded byte region for safe manual scanning. */
         val cString = nativeStringSegment.reinterpret(MAX_C_STRING_BYTES)
@@ -91,7 +120,7 @@ internal object MsStoreNativeHelpers {
 
         /* Abort if no terminator was found in the allowed scan window. */
         if (length == MAX_C_STRING_BYTES)
-            throw IllegalStateException("Native string exceeds ${MAX_C_STRING_BYTES / 1024 / 1024} MiB.")
+            throw IllegalStateException("Native string exceeds ${MAX_C_STRING_BYTES / BYTES_PER_MEBIBYTE} MiB.")
 
         /* Copy bytes into a JVM-owned array before decoding as UTF-8. */
         val bytes = ByteArray(length.toInt())

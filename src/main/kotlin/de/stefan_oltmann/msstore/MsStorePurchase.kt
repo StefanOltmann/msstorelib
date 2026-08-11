@@ -50,9 +50,15 @@ internal object MsStorePurchase {
         } catch (ex: MsStoreLicenseException) {
             /* Pass on MsStoreLicenseException as is. */
             throw ex
+        } catch (ex: IllegalCallerException) {
+            /* Restricted FFM calls are blocked (JEP 472); give launch instructions. */
+            throw MsStoreLicenseException(NATIVE_ACCESS_HELP_MESSAGE, ex)
+        } catch (ex: ExceptionInInitializerError) {
+            /* Native init fails before any call when restricted access is blocked or the DLL cannot load. */
+            throw MsStoreLicenseException(MsStoreNativeHelpers.initFailureMessage("Purchase request failed.", ex), ex)
         } catch (ex: Throwable) {
-            /* Wrap everything else in a MsStoreLicenseException */
-            throw MsStoreLicenseException(ex.message ?: "Request query failed.")
+            /* Wrap everything else and preserve the original error as cause. */
+            throw MsStoreLicenseException(ex.message ?: "Purchase request failed.", ex)
         }
     }
 }

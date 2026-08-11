@@ -1,2 +1,10 @@
-# Don't touch line endings for all files
-* -text
+# Normalize all text files to LF line endings in the repository, so all
+# platforms share one encoding in committed content.
+* text=auto
+
+# cmd.exe expects CRLF line endings in batch files.
+*.bat text eol=crlf
+
+# Binary artifacts are never converted.
+gradle/wrapper/gradle-wrapper.jar -text
+src/main/resources/windows-x86_64/msstore_winrt.dll -text

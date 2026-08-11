@@ -1,5 +1,22 @@
+/*
+ * Copyright 2026 Stefan Oltmann
+ * https://github.com/StefanOltmann/msstorelib
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 /*
@@ -32,6 +49,8 @@ extern "C" {
      * WinRT API without the overhead of JSON parsing in the JVM.
      *
      * Note: All strings are UTF-8 and must be freed via msstore_winrt_free().
+     * ExpirationDate is Unix epoch milliseconds; 0 means the license does
+     * not expire.
      */
 
     typedef struct {
@@ -48,6 +67,24 @@ extern "C" {
         MsStoreAddOnLicenseNative* AddOnLicenses;
         int AddOnLicensesCount;
     } MsStoreLicenseNative;
+
+    /*
+     * The JVM reads these structs via FFM with hardcoded sizes and offsets
+     * (MsStoreLicense.kt). These asserts fail the native build when the
+     * layout changes, so the two sides cannot drift silently.
+     */
+    static_assert(sizeof(MsStoreAddOnLicenseNative) == 24, "JVM expects MsStoreAddOnLicenseNative size 24.");
+    static_assert(offsetof(MsStoreAddOnLicenseNative, SkuStoreId) == 0, "JVM expects SkuStoreId at offset 0.");
+    static_assert(offsetof(MsStoreAddOnLicenseNative, InAppOfferToken) == 8, "JVM expects InAppOfferToken at offset 8.");
+    static_assert(offsetof(MsStoreAddOnLicenseNative, ExpirationDate) == 16, "JVM expects ExpirationDate at offset 16.");
+
+    static_assert(sizeof(MsStoreLicenseNative) == 40, "JVM expects MsStoreLicenseNative size 40.");
+    static_assert(offsetof(MsStoreLicenseNative, SkuStoreId) == 0, "JVM expects SkuStoreId at offset 0.");
+    static_assert(offsetof(MsStoreLicenseNative, IsActive) == 8, "JVM expects IsActive at offset 8.");
+    static_assert(offsetof(MsStoreLicenseNative, IsTrial) == 9, "JVM expects IsTrial at offset 9.");
+    static_assert(offsetof(MsStoreLicenseNative, ExpirationDate) == 16, "JVM expects ExpirationDate at offset 16.");
+    static_assert(offsetof(MsStoreLicenseNative, AddOnLicenses) == 24, "JVM expects AddOnLicenses at offset 24.");
+    static_assert(offsetof(MsStoreLicenseNative, AddOnLicensesCount) == 32, "JVM expects AddOnLicensesCount at offset 32.");
 
     /*
      * Returns the current app license information.

@@ -1,3 +1,10 @@
+# Copyright 2026 Stefan Oltmann
+# https://github.com/StefanOltmann/msstorelib
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# See the LICENSE file for the full license text.
+
 cmake_minimum_required(VERSION 3.20)
 
 # Native C++/WinRT DLL that bridges StoreContext to a C ABI for the JVM.

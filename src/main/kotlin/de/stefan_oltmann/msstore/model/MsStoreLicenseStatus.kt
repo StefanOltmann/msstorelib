@@ -16,6 +16,9 @@
  */
 package de.stefan_oltmann.msstore.model
 
+/**
+ * License state of an app derived from its Store license info.
+ */
 public enum class MsStoreLicenseStatus {
 
     /**

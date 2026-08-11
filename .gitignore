@@ -4,3 +4,6 @@
 .kotlin
 /src/main/resources/windows-x86_64/msstore_winrt.dll
 build/
+/AGENTS.md
+/TODO.md
+/opencode.json

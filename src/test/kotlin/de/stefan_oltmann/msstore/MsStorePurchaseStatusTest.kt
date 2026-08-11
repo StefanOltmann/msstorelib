@@ -29,6 +29,8 @@ class MsStorePurchaseStatusTest {
         assertEquals(MsStorePurchaseStatus.NotPurchased, MsStorePurchaseStatus.fromNativeCode(2))
         assertEquals(MsStorePurchaseStatus.NetworkError, MsStorePurchaseStatus.fromNativeCode(3))
         assertEquals(MsStorePurchaseStatus.ServerError, MsStorePurchaseStatus.fromNativeCode(4))
+        assertEquals(MsStorePurchaseStatus.Unknown, MsStorePurchaseStatus.fromNativeCode(5))
+        assertEquals(MsStorePurchaseStatus.Unknown, MsStorePurchaseStatus.fromNativeCode(-1))
         assertEquals(MsStorePurchaseStatus.Unknown, MsStorePurchaseStatus.fromNativeCode(42))
     }
 }
