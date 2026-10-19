@@ -24,7 +24,7 @@ repositories {
 }
 
 dependencies {
-    implementation("de.stefan-oltmann:msstorelib:0.6.0")
+    implementation("de.stefan-oltmann:msstorelib:0.7.0")
 }
 ```
 
