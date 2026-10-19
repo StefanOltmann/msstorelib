@@ -33,7 +33,7 @@ import java.lang.foreign.ValueLayout
  */
 internal object MsStoreLicense {
 
-    private const val MSSTORE_LICENSE_NATIVE_SIZE = 40L
+    private const val MSSTORE_LICENSE_NATIVE_SIZE = 56L
     private const val MSSTORE_ADDON_LICENSE_NATIVE_SIZE = 24L
 
     /**
@@ -82,7 +82,10 @@ internal object MsStoreLicense {
          * 16: ExpirationDate (LONG)
          * 24: AddOnLicenses (ADDRESS)
          * 32: AddOnLicensesCount (INT)
-         * (Padding to 40)
+         * 36-39: (Padding to align int64)
+         * 40: CampaignId (ADDRESS)
+         * 48: AcquiredDate (LONG)
+         * (Padding to 56)
          */
 
         val skuStoreId = readString(licenseStruct, 0) ?: ""
@@ -92,6 +95,15 @@ internal object MsStoreLicense {
         val expirationDate = licenseStruct.get(ValueLayout.JAVA_LONG, 16)
         val addOnLicensesPointer = licenseStruct.get(ValueLayout.ADDRESS, 24)
         val addOnLicensesCount = licenseStruct.get(ValueLayout.JAVA_INT, 32)
+
+        /*
+         * Acquisition metadata for the app's own product SKU. The native layer
+         * leaves CampaignId null and AcquiredDate 0 when the Store does not
+         * provide collection data, so both are mapped to Kotlin null here and a
+         * missing value can never be mistaken for a real acquisition date.
+         */
+        val campaignId = readString(licenseStruct, 40)?.takeIf { it.isNotEmpty() }
+        val acquiredDate = licenseStruct.get(ValueLayout.JAVA_LONG, 48).takeIf { it > 0L }
 
         val addOns = mutableListOf<MsStoreAddOnLicenseInfo>()
 
@@ -128,7 +140,9 @@ internal object MsStoreLicense {
             expirationDate = expirationDate,
             isActive = isActive,
             isTrial = isTrial,
-            addOnLicenses = addOns
+            addOnLicenses = addOns,
+            acquiredDate = acquiredDate,
+            campaignId = campaignId
         )
     }
 

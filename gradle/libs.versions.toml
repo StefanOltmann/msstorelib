@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.4.10"
+kotlin = "2.4.21"
 git-versioning = "6.4.4"
 maven-publish = "0.37.0"
 detekt = "2.0.0-alpha.6"

@@ -23,6 +23,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MsStoreLicenseInfoTest {
@@ -223,5 +224,48 @@ class MsStoreLicenseInfoTest {
     @Test
     fun isInstalledFromStoreIsTrueWithSkuId() {
         assertTrue(MsStoreLicenseInfo(skuId = "0010").isInstalledFromStore)
+    }
+
+    /*
+     * Acquisition metadata is optional: a missing value must be null instead of
+     * 0 or an empty string, so callers can tell "unknown" from a real value.
+     */
+    @Test
+    fun acquisitionMetadataDefaultsToNull() {
+
+        val info = MsStoreLicenseInfo()
+
+        assertNull(info.acquiredDate)
+        assertNull(info.campaignId)
+    }
+
+    @Test
+    fun acquisitionMetadataIsExposed() {
+
+        val info = MsStoreLicenseInfo(
+            acquiredDate = 1_700_000_000_000L,
+            campaignId = "summer_promo"
+        )
+
+        assertEquals(1_700_000_000_000L, info.acquiredDate)
+        assertEquals("summer_promo", info.campaignId)
+    }
+
+    /*
+     * Acquisition metadata must not affect the license status classification.
+     */
+    @Test
+    fun acquisitionMetadataDoesNotAffectLicenseStatus() {
+
+        val info = MsStoreLicenseInfo(
+            storeId = storeId,
+            skuId = "0010",
+            isActive = true,
+            expirationDate = Long.MAX_VALUE,
+            acquiredDate = 1_700_000_000_000L,
+            campaignId = "summer_promo"
+        )
+
+        assertEquals(MsStoreLicenseStatus.Licensed, info.check(storeId))
     }
 }

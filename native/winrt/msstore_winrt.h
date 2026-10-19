@@ -51,6 +51,13 @@ extern "C" {
      * Note: All strings are UTF-8 and must be freed via msstore_winrt_free().
      * ExpirationDate is Unix epoch milliseconds; 0 means the license does
      * not expire.
+     *
+     * AcquiredDate is Unix epoch milliseconds as well; 0 means the Store did
+     * not provide an acquisition date for the app's own product SKU.
+     * CampaignId is nullptr when the Store did not provide collection data
+     * for the app's own product SKU. Both fields describe the app's own
+     * product SKU (StoreSku.CollectionData) and are never taken from add-on
+     * licenses.
      */
 
     typedef struct {
@@ -66,6 +73,8 @@ extern "C" {
         int64_t ExpirationDate;
         MsStoreAddOnLicenseNative* AddOnLicenses;
         int AddOnLicensesCount;
+        const char* CampaignId;
+        int64_t AcquiredDate;
     } MsStoreLicenseNative;
 
     /*
@@ -78,13 +87,15 @@ extern "C" {
     static_assert(offsetof(MsStoreAddOnLicenseNative, InAppOfferToken) == 8, "JVM expects InAppOfferToken at offset 8.");
     static_assert(offsetof(MsStoreAddOnLicenseNative, ExpirationDate) == 16, "JVM expects ExpirationDate at offset 16.");
 
-    static_assert(sizeof(MsStoreLicenseNative) == 40, "JVM expects MsStoreLicenseNative size 40.");
+    static_assert(sizeof(MsStoreLicenseNative) == 56, "JVM expects MsStoreLicenseNative size 56.");
     static_assert(offsetof(MsStoreLicenseNative, SkuStoreId) == 0, "JVM expects SkuStoreId at offset 0.");
     static_assert(offsetof(MsStoreLicenseNative, IsActive) == 8, "JVM expects IsActive at offset 8.");
     static_assert(offsetof(MsStoreLicenseNative, IsTrial) == 9, "JVM expects IsTrial at offset 9.");
     static_assert(offsetof(MsStoreLicenseNative, ExpirationDate) == 16, "JVM expects ExpirationDate at offset 16.");
     static_assert(offsetof(MsStoreLicenseNative, AddOnLicenses) == 24, "JVM expects AddOnLicenses at offset 24.");
     static_assert(offsetof(MsStoreLicenseNative, AddOnLicensesCount) == 32, "JVM expects AddOnLicensesCount at offset 32.");
+    static_assert(offsetof(MsStoreLicenseNative, CampaignId) == 40, "JVM expects CampaignId at offset 40.");
+    static_assert(offsetof(MsStoreLicenseNative, AcquiredDate) == 48, "JVM expects AcquiredDate at offset 48.");
 
     /*
      * Returns the current app license information.

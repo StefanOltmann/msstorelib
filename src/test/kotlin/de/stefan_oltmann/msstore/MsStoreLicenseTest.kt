@@ -22,13 +22,14 @@ import java.lang.foreign.ValueLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
  * Mirror of the native layout from msstore_winrt.h. Offsets and sizes are
  * guarded by static_asserts on the C++ side, so both sides cannot drift.
  */
-private const val LICENSE_SIZE = 40L
+private const val LICENSE_SIZE = 56L
 private const val ADDON_SIZE = 24L
 private const val OFF_SKU_STORE_ID = 0L
 private const val OFF_IS_ACTIVE = 8L
@@ -36,6 +37,8 @@ private const val OFF_IS_TRIAL = 9L
 private const val OFF_EXPIRATION = 16L
 private const val OFF_ADDONS = 24L
 private const val OFF_ADDON_COUNT = 32L
+private const val OFF_CAMPAIGN_ID = 40L
+private const val OFF_ACQUIRED_DATE = 48L
 private const val OFF_IN_APP_OFFER_TOKEN = 8L
 private const val OFF_ADDON_EXPIRATION = 16L
 
@@ -211,6 +214,117 @@ class MsStoreLicenseTest {
         }
     }
 
+    @Test
+    fun parsesAcquisitionMetadata() {
+
+        Arena.ofConfined().use { arena ->
+
+            val license = allocateLicense(
+                arena,
+                skuStoreId = "9ND96XCDZRGB/0010",
+                isActive = true,
+                isTrial = false,
+                expirationDate = 0L,
+                addOns = null,
+                addOnCount = 0,
+                campaignId = "summer_promo",
+                acquiredDate = 1_700_000_000_000L
+            )
+
+            val info = MsStoreLicense.readLicenseInfo(license)
+
+            assertEquals(1_700_000_000_000L, info.acquiredDate)
+            assertEquals("summer_promo", info.campaignId)
+        }
+    }
+
+    @Test
+    fun parsesMissingAcquisitionMetadataAsNull() {
+
+        Arena.ofConfined().use { arena ->
+
+            val license = allocateLicense(
+                arena,
+                skuStoreId = "9ND96XCDZRGB/0010",
+                isActive = true,
+                isTrial = false,
+                expirationDate = 0L,
+                addOns = null,
+                addOnCount = 0
+            )
+
+            val info = MsStoreLicense.readLicenseInfo(license)
+
+            assertNull(info.acquiredDate)
+            assertNull(info.campaignId)
+        }
+    }
+
+    @Test
+    fun parsesEmptyCampaignIdAndZeroAcquiredDateAsNull() {
+
+        Arena.ofConfined().use { arena ->
+
+            val license = allocateLicense(
+                arena,
+                skuStoreId = "9ND96XCDZRGB/0010",
+                isActive = true,
+                isTrial = false,
+                expirationDate = 0L,
+                addOns = null,
+                addOnCount = 0,
+                campaignId = "",
+                acquiredDate = 0L
+            )
+
+            val info = MsStoreLicense.readLicenseInfo(license)
+
+            assertNull(info.acquiredDate)
+            assertNull(info.campaignId)
+        }
+    }
+
+    /*
+     * The acquisition metadata must come from the app's own fields even when
+     * add-on licenses are present, so it is never read from an add-on entry.
+     */
+    @Test
+    fun parsesAcquisitionMetadataAlongsideAddOns() {
+
+        Arena.ofConfined().use { arena ->
+
+            val addOns = allocateAddOn(
+                arena,
+                skuStoreId = "9NBLGGH4R315/0001",
+                inAppOfferToken = "offer_one",
+                expirationDate = 111L,
+                skuStoreId2 = "9NBLGGH4R316/0002",
+                inAppOfferToken2 = "offer_two",
+                expirationDate2 = 222L
+            )
+
+            val license = allocateLicense(
+                arena,
+                skuStoreId = "9ND96XCDZRGB/0010",
+                isActive = true,
+                isTrial = false,
+                expirationDate = 12_345L,
+                addOns = addOns,
+                addOnCount = 2,
+                campaignId = "app_campaign",
+                acquiredDate = 1_650_000_000_000L
+            )
+
+            val info = MsStoreLicense.readLicenseInfo(license)
+
+            assertEquals(1_650_000_000_000L, info.acquiredDate)
+            assertEquals("app_campaign", info.campaignId)
+            assertEquals(2, info.addOnLicenses.size)
+            assertEquals("9NBLGGH4R315", info.addOnLicenses[0].storeId)
+            assertEquals("9NBLGGH4R316", info.addOnLicenses[1].storeId)
+        }
+    }
+
     private fun allocateLicense(
         arena: Arena,
         skuStoreId: String?,
@@ -218,7 +332,9 @@ class MsStoreLicenseTest {
         isTrial: Boolean,
         expirationDate: Long,
         addOns: MemorySegment?,
-        addOnCount: Int
+        addOnCount: Int,
+        campaignId: String? = null,
+        acquiredDate: Long = 0L
     ): MemorySegment {
 
         val license = arena.allocate(LICENSE_SIZE, 8)
@@ -229,6 +345,8 @@ class MsStoreLicenseTest {
         license.set(ValueLayout.JAVA_LONG, OFF_EXPIRATION, expirationDate)
         license.set(ValueLayout.ADDRESS, OFF_ADDONS, addOns ?: MemorySegment.NULL)
         license.set(ValueLayout.JAVA_INT, OFF_ADDON_COUNT, addOnCount)
+        license.set(ValueLayout.ADDRESS, OFF_CAMPAIGN_ID, allocateCString(arena, campaignId))
+        license.set(ValueLayout.JAVA_LONG, OFF_ACQUIRED_DATE, acquiredDate)
 
         return license
     }

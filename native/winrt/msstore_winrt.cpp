@@ -53,6 +53,15 @@ static thread_local std::string g_lastError;
 static constexpr std::chrono::seconds LICENSE_QUERY_TIMEOUT{30};
 
 /*
+ * Bound for the optional collection-data query.
+ *
+ * Acquisition metadata (StoreSku.CollectionData) comes from a second Store
+ * call that is best-effort only, so it gets a shorter budget than the license
+ * query: a slow Store must not extend the license query by a full timeout.
+ */
+static constexpr std::chrono::seconds COLLECTION_QUERY_TIMEOUT{10};
+
+/*
  * Interval for polling the async license query status.
  */
 static constexpr std::chrono::milliseconds ASYNC_POLL_INTERVAL{50};
@@ -231,6 +240,89 @@ static bool wait_for_completion(
 }
 
 /*
+ * Reads the acquisition metadata of the app's own product SKU.
+ *
+ * The app's own product is fetched with GetStoreProductForCurrentAppAsync();
+ * its SKUs carry the StoreCollectionData that holds AcquiredDate and CampaignId.
+ * CollectionData is only set for SKUs the user has an entitlement to, so a
+ * product without such a SKU (for example an app that was not acquired from the
+ * Store) yields no data.
+ *
+ * Only the current app's own product is inspected. Add-on licenses come from a
+ * different API (StoreAppLicense.AddOnLicenses), so an add-on's acquisition
+ * date or campaign ID can never leak into these fields.
+ *
+ * Best-effort by design: returns false when the Store does not provide the data
+ * or the query fails, so the caller can leave the fields empty instead of
+ * failing the whole license query. Errors are swallowed on purpose and never
+ * written to g_lastError.
+ *
+ * @param acquiredDateMillis Receives Unix epoch milliseconds, 0 when absent.
+ * @param campaignId         Receives the campaign ID, empty when absent.
+ * @return true when collection data was found for an app SKU.
+ */
+static bool read_app_collection_data(
+    const StoreContext& context,
+    int64_t& acquiredDateMillis,
+    std::string& campaignId
+) {
+
+    acquiredDateMillis = 0;
+    campaignId.clear();
+
+    auto productOperation = context.GetStoreProductForCurrentAppAsync();
+
+    if (!wait_for_completion(
+            productOperation.as<winrt::Windows::Foundation::IAsyncInfo>(),
+            COLLECTION_QUERY_TIMEOUT
+        )) {
+        return false;
+    }
+
+    StoreProductResult productResult = productOperation.GetResults();
+
+    if (!productResult)
+        return false;
+
+    StoreProduct product = productResult.Product();
+
+    if (!product)
+        return false;
+
+    /*
+     * A product can expose more than one SKU (for example a trial SKU next to
+     * the full one). Pick the first SKU that carries collection data, preferring
+     * a non-trial SKU so the reported acquisition date belongs to the app rather
+     * than to its trial.
+     */
+    StoreSku selectedSku = nullptr;
+
+    for (auto const& sku : product.Skus()) {
+
+        if (!sku.CollectionData())
+            continue;
+
+        if (selectedSku && !selectedSku.IsTrial())
+            break;
+
+        selectedSku = sku;
+    }
+
+    if (!selectedSku)
+        return false;
+
+    StoreCollectionData collectionData = selectedSku.CollectionData();
+
+    if (!collectionData)
+        return false;
+
+    acquiredDateMillis = to_unix_epoch_millis(collectionData.AcquiredDate());
+    campaignId = to_string(collectionData.CampaignId());
+
+    return true;
+}
+
+/*
  * Returns the StoreAppLicense information directly, or nullptr on error.
  *
  * The returned pointer and all nested strings/arrays are allocated with
@@ -313,6 +405,28 @@ extern "C" MSSTORE_WINRT_API MsStoreLicenseNative* msstore_winrt_get_license() {
             }
         } else {
             licensePointer->AddOnLicenses = nullptr;
+        }
+
+        /*
+         * Acquisition metadata for the app's own product SKU is optional and
+         * best-effort: a failure here must never fail the license query, so it
+         * is isolated and does not touch g_lastError. When the Store does not
+         * provide the data, CampaignId stays nullptr and AcquiredDate stays 0,
+         * which the JVM maps to null.
+         */
+        try {
+
+            int64_t acquiredDateMillis = 0;
+            std::string campaignId;
+
+            if (read_app_collection_data(context, acquiredDateMillis, campaignId)) {
+
+                licensePointer->AcquiredDate = acquiredDateMillis;
+                licensePointer->CampaignId = campaignId.empty() ? nullptr : dup_string(campaignId);
+            }
+
+        } catch (...) {
+            /* Leave the acquisition fields empty. */
         }
 
         g_lastError.clear();
@@ -403,6 +517,7 @@ extern "C" MSSTORE_WINRT_API void msstore_winrt_free_license(MsStoreLicenseNativ
         return;
 
     msstore_winrt_free(pointer->SkuStoreId);
+    msstore_winrt_free(pointer->CampaignId);
 
     if (pointer->AddOnLicenses != nullptr) {
 

@@ -19,13 +19,18 @@ package de.stefan_oltmann.msstore.model
 import de.stefan_oltmann.msstore.MsStoreLicenseException
 
 /**
- * Subset of Store app license fields returned by the native WinRT API.
+ * Subset of Store app license fields returned by the native WinRT API, plus the
+ * acquisition metadata of the app's own product SKU.
  *
- * Fields are modeled as Kotlin primitives/strings plus a list of add-on entries
- * to keep parsing stable across schema revisions. Date values are returned as
- * Unix timestamps (milliseconds).
+ * The license fields come from `StoreAppLicense`; [acquiredDate] and
+ * [campaignId] come from `StoreSku.CollectionData` of the app's own product
+ * (see [StoreContext.GetStoreProductForCurrentAppAsync]). Fields are modeled as
+ * Kotlin primitives/strings plus a list of add-on entries to keep parsing stable
+ * across schema revisions. Date values are returned as Unix timestamps
+ * (milliseconds).
  *
  * @see https://learn.microsoft.com/uwp/api/windows.services.store.storeapplicense
+ * @see https://learn.microsoft.com/uwp/api/windows.services.store.storecollectiondata
  */
 public data class MsStoreLicenseInfo(
 
@@ -64,7 +69,35 @@ public data class MsStoreLicenseInfo(
      * Collection of licenses for durable add-ons for which the user has entitlements to use.
      * This property does not include licenses for consumable add-ons.
      */
-    val addOnLicenses: List<MsStoreAddOnLicenseInfo> = emptyList()
+    val addOnLicenses: List<MsStoreAddOnLicenseInfo> = emptyList(),
+
+    /**
+     * Date and time when the current user acquired the app's own product SKU,
+     * as Unix timestamp in milliseconds, or `null` when the Store does not
+     * provide it.
+     *
+     * The value is read from [StoreSku.CollectionData] of the app's own product
+     * (see [StoreContext.GetStoreProductForCurrentAppAsync]) and describes the
+     * app itself, never an add-on or in-app purchase. It is `null` when the
+     * Store provides no collection data for the app SKU, for example when the
+     * app is not installed from the Store or when the optional Store query
+     * fails. A `null` value must not be treated as "acquired just now".
+     *
+     * @see https://learn.microsoft.com/uwp/api/windows.services.store.storecollectiondata.acquireddate
+     */
+    val acquiredDate: Long? = null,
+
+    /**
+     * Promotion campaign ID that is associated with the app's own product SKU,
+     * or `null` when no campaign is associated or the Store does not provide
+     * collection data for the app SKU.
+     *
+     * The value is read from [StoreSku.CollectionData] of the app's own product
+     * and describes the app itself, never an add-on or in-app purchase.
+     *
+     * @see https://learn.microsoft.com/uwp/api/windows.services.store.storecollectiondata.campaignid
+     */
+    val campaignId: String? = null
 
 ) {
 

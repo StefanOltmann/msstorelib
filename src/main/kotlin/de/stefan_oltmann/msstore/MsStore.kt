@@ -31,10 +31,16 @@ public object MsStore {
     /**
      * Returns the current app license info.
      *
-     * This blocks the calling thread until the Store answers; the native
-     * layer aborts the query after 30 seconds when the Store service does
-     * not respond. Call it from a background thread and keep the UI
-     * thread responsive.
+     * The result also carries the acquisition metadata of the app's own product
+     * SKU: [MsStoreLicenseInfo.acquiredDate] and [MsStoreLicenseInfo.campaignId].
+     * These fields are optional and are `null` when the Store does not provide
+     * collection data for the app SKU; they are never taken from add-on
+     * licenses.
+     *
+     * This blocks the calling thread until the Store answers; the native layer
+     * aborts the license query after 30 seconds and the optional acquisition
+     * query after 10 seconds when the Store service does not respond. Call it
+     * from a background thread and keep the UI thread responsive.
      *
      * @throws MsStoreLicenseException when the native call fails.
      */
