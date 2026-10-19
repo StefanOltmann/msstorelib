@@ -1,6 +1,6 @@
 # msstorelib
 
-![Kotlin](https://img.shields.io/badge/kotlin-2.4.10-blue.svg?logo=kotlin)
+![Kotlin](https://img.shields.io/badge/kotlin-2.4.21-blue.svg?logo=kotlin)
 ![Java 25+](https://img.shields.io/badge/Java-25%2B-gray.svg?style=flat)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-gray?&logo=GitHub-Sponsors&logoColor=EA4AAA)](https://github.com/sponsors/StefanOltmann)
 
